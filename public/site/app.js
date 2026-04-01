@@ -115,7 +115,6 @@ mermaid.initialize({
     noteTextColor: "#dbeafe",
     activationBorderColor: "#60a5fa",
     activationBkgColor: "rgba(96, 165, 250, 0.18)",
-    sequenceNumberColor: "#7dd3fc",
   },
 });
 
@@ -248,7 +247,6 @@ function setupHeaderState() {
 function buildMermaidFlow() {
   return [
     "sequenceDiagram",
-    "autonumber",
     "accTitle: P401 protected-route proof flow",
     "accDescr: P401 protected-route proof flow with all steps rendered in a single sequence diagram.",
     "participant wallet as Wallet",
@@ -276,18 +274,9 @@ function annotateFlowDiagramSteps(diagram) {
 
   const messageTexts = Array.from(svg.querySelectorAll(".messageText"));
   const messageLines = Array.from(svg.querySelectorAll(".messageLine0, .messageLine1"));
-  const sequenceNumberMarkers = Array.from(
-    svg.querySelectorAll('line[marker-start*="sequencenumber"]'),
-  );
-  const sequenceNumbers = Array.from(svg.querySelectorAll(".sequenceNumber"));
   const totalMessages = FLOW_STEPS.reduce((count, step) => count + step.sequenceLines.length, 0);
 
-  if (
-    messageTexts.length !== totalMessages ||
-    messageLines.length !== totalMessages ||
-    sequenceNumberMarkers.length !== totalMessages ||
-    sequenceNumbers.length !== totalMessages
-  ) {
+  if (messageTexts.length !== totalMessages || messageLines.length !== totalMessages) {
     console.warn("Unexpected Mermaid sequence structure; step fades were not applied.");
     return false;
   }
@@ -305,8 +294,6 @@ function annotateFlowDiagramSteps(diagram) {
     const nodes = sortNodesInDocumentOrder([
       ...messageTexts.slice(messageOffset, messageOffset + stepMessageCount),
       ...messageLines.slice(messageOffset, messageOffset + stepMessageCount),
-      ...sequenceNumberMarkers.slice(messageOffset, messageOffset + stepMessageCount),
-      ...sequenceNumbers.slice(messageOffset, messageOffset + stepMessageCount),
     ]);
     messageOffset += stepMessageCount;
 
@@ -356,7 +343,7 @@ async function renderFlowDiagram() {
       return;
     }
 
-    diagram.innerHTML = `<div class="flow-stage__diagram">${svg}</div>`;
+    diagram.innerHTML = svg;
     bindFunctions?.(diagram);
     annotateFlowDiagramSteps(diagram);
     syncFlowDiagramVisibility();

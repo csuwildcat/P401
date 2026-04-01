@@ -488,36 +488,22 @@ wa-card::part(base) {
   width: 100%;
 }
 
-.flow-panel__body {
+.flow-panel {
   display: flex;
   flex-direction: column;
   gap: 1.35rem;
-  padding: 1.5rem;
 }
 
-.flow-stage {
+#flow-diagram {
   display: grid;
   align-items: center;
   justify-items: center;
   min-height: clamp(23rem, 52vw, 31rem);
   padding: 1.1rem;
-  border: 1px solid var(--line-strong);
-  border-radius: calc(var(--radius) + 2px);
-  background:
-    radial-gradient(circle at top, rgba(96, 165, 250, 0.14), transparent 34%),
-    linear-gradient(180deg, rgba(18, 24, 39, 0.94), rgba(10, 15, 24, 0.98));
   overflow: auto;
 }
 
-.flow-stage__diagram {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  min-height: 100%;
-}
-
-.flow-stage svg {
+#flow-diagram svg {
   width: min(100%, 58rem);
   height: auto;
   display: block;
@@ -952,7 +938,7 @@ wa-card::part(base) {
     height: 13.75rem;
   }
 
-  .flow-stage {
+  #flow-diagram {
     min-height: 21rem;
     padding: 0.9rem;
   }
