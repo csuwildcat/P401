@@ -1,0 +1,34 @@
+{
+  "name": "p401-spec",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Spec-Up configuration for the P401 specification",
+  "scripts": {
+    "demo:dev": "tsx watch src/server.ts",
+    "demo:start": "tsx src/server.ts",
+    "site:build": "node scripts/build-pages.mjs",
+    "site:watch": "node scripts/site-watch.mjs",
+    "spec:render": "node --input-type=module -e \"const { default: specUp } = await import('spec-up'); specUp({ nowatch: true });\"",
+    "spec:edit": "node --input-type=module -e \"const { default: specUp } = await import('spec-up'); specUp();\"",
+    "spec:dev": "node --input-type=module -e \"const { default: specUp } = await import('spec-up'); specUp({ dev: true });\""
+  },
+  "dependencies": {
+    "@openid4vc/openid4vci": "^0.4.6",
+    "@openid4vc/openid4vp": "^0.4.6",
+    "did-jwt": "^8.0.18",
+    "did-jwt-vc": "^4.0.16",
+    "did-resolver": "^4.1.0",
+    "express": "^5.2.1",
+    "jose": "^6.2.2",
+    "lit": "^3.3.2",
+    "mermaid": "^11.13.0",
+    "spec-up": "0.10.8"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.8.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}
