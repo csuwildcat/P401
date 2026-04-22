@@ -388,6 +388,10 @@ wa-card::part(base) {
   font-size: 0.82rem;
 }
 
+.hero-highlights {
+  margin-top: 7rem !important;
+}
+
 .hero-highlights,
 .feature-grid,
 .comparison-grid {

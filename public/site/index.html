@@ -99,10 +99,9 @@
             </h1>
 
             <p class="hero-copy__lede">
-              A universal HTTP-based proof challenge flow that lets protected
-              routes ask for credential proof directly. P401 reuses OIDC4VP and
-              optional OIDC4VCI hints, while keeping payment under
-              <code>402 Payment Required</code>.
+              A universal HTTP-based challenge flow that enables resource gating 
+              based on fulfillment of credential proof requirements. P401 reuses OIDC4VP and
+              optional OIDC4VCI hints, while leaving payment to 402 protocols.
             </p>
 
             <div class="hero-copy__actions">
@@ -118,14 +117,6 @@
                 View on GitHub
               </wa-button>
             </div>
-
-            <div class="hero-strip pixel-border">
-              <span>401 + <code>WWW-Authenticate: P401</code></span>
-              <span>OIDC4VP by value or <code>request_uri</code></span>
-              <span>Optional OIDC4VCI acquisition hints</span>
-              <span>Retry with proof artifact or verifier receipt</span>
-            </div>
-          </div>
 
           <div class="hero-highlights">
             <wa-card class="info-card hover-elevate" appearance="filled-outlined">
