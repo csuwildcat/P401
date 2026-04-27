@@ -14,16 +14,16 @@ const FLOW_STEPS = [
   },
   {
     shortTitle: "Return challenge",
-    title: "Verifier returns a P401 challenge",
+    title: "Verifier returns a x401 challenge",
     iconLabel: "401",
     description:
-      "The route responds with 401 Unauthorized, WWW-Authenticate: P401, and a P401 envelope describing the proof contract.",
+      "The route responds with 401 Unauthorized, WWW-Authenticate: x401, and a x401 envelope describing the proof contract.",
     copy:
-      "<strong>2.</strong> The verifier answers with <strong>401 Unauthorized</strong>, a <strong>WWW-Authenticate: P401</strong> challenge, and a body carrying the P401 envelope.",
+      "<strong>2.</strong> The verifier answers with <strong>401 Unauthorized</strong>, a <strong>WWW-Authenticate: x401</strong> challenge, and a body carrying the x401 envelope.",
     from: "verifier",
     to: "holder",
     sequenceLines: [
-      "verifier-->>holder: 401 + WWW-Authenticate: P401<br/>P401 envelope with OIDC4VP request",
+      "verifier-->>holder: 401 + WWW-Authenticate: x401<br/>x401 envelope with OIDC4VP request",
     ],
   },
   {
@@ -159,7 +159,7 @@ function fetchGithubStars() {
     return;
   }
 
-  fetch("https://api.github.com/repos/csuwildcat/P401")
+  fetch("https://api.github.com/repos/csuwildcat/x401")
     .then((response) => {
       if (!response.ok) {
         throw new Error(`GitHub returned ${response.status}`);
@@ -184,6 +184,7 @@ function setupHeaderState() {
   const header = document.querySelector("[data-site-header]");
   const toggle = document.querySelector("[data-nav-toggle]");
   const panel = document.querySelector("[data-nav-panel]");
+  const root = document.documentElement;
   if (!(header instanceof HTMLElement) || !(toggle instanceof HTMLElement) || !panel) {
     return;
   }
@@ -194,13 +195,13 @@ function setupHeaderState() {
 
   const closeNav = () => {
     header.dataset.open = "false";
-    document.body.dataset.navOpen = "false";
+    root.dataset.navOpen = "false";
     toggle.setAttribute("aria-expanded", "false");
   };
 
   const openNav = () => {
     header.dataset.open = "true";
-    document.body.dataset.navOpen = "true";
+    root.dataset.navOpen = "true";
     toggle.setAttribute("aria-expanded", "true");
   };
 
@@ -247,8 +248,8 @@ function setupHeaderState() {
 function buildMermaidFlow() {
   return [
     "sequenceDiagram",
-    "accTitle: P401 protected-route proof flow",
-    "accDescr: P401 protected-route proof flow with all steps rendered in a single sequence diagram.",
+    "accTitle: x401 protected-route proof flow",
+    "accDescr: x401 protected-route proof flow with all steps rendered in a single sequence diagram.",
     "participant wallet as Wallet",
     "participant holder as Caller",
     "participant verifier as Verifier / Route",
@@ -354,7 +355,7 @@ async function renderFlowDiagram() {
 
     diagram.innerHTML = `
       <div class="flow-stage__fallback">
-        <p>Unable to render the P401 swimlane diagram for this step.</p>
+        <p>Unable to render the x401 swimlane diagram for this step.</p>
       </div>
     `;
     console.error("Failed to render Mermaid flow diagram", error);

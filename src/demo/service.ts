@@ -3,7 +3,7 @@ import type { CredentialIssuerMetadata } from "@openid4vc/openid4vci";
 import type { Openid4vpAuthorizationResponse } from "@openid4vc/openid4vp";
 import { createOid4vcCallbacks, decodeJsonJwtPayload, signJsonJwt, verifyJsonJwt } from "../core/crypto.js";
 import { buildDidDocument, createLocalDidResolver } from "../core/dids.js";
-import { buildMedicalStudyEnvelope, buildP401AuthenticateHeader } from "../core/p401.js";
+import { buildMedicalStudyEnvelope, buildx401AuthenticateHeader } from "../core/x401.js";
 import { createEncodedStatusList, createStatusListEntry, isStatusListRevoked } from "../core/status-list.js";
 import type {
   ChallengeRecord,
@@ -391,7 +391,7 @@ export class DemoService {
       nonce,
       state,
       paperPath: DEMO_CONSTANTS.paperPath,
-      wwwAuthenticate: buildP401AuthenticateHeader({
+      wwwAuthenticate: buildx401AuthenticateHeader({
         challengeId,
         requestRef: requestUri,
       }),
@@ -706,7 +706,7 @@ export class DemoService {
     return {
       ...this.paper,
       accessGranted: true,
-      reason: "Active Texas board certification proved through P401 and OIDC4VP.",
+      reason: "Active Texas board certification proved through x401 and OIDC4VP.",
     };
   }
 }

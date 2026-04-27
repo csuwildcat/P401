@@ -1,4 +1,4 @@
-P401: HTTP Proof Challenge Protocol
+x401: HTTP Proof Challenge Protocol
 ==================
 
 Status: Draft
@@ -9,28 +9,28 @@ Editors:
 ~ Daniel Buchner
 
 Participate:
-~ [GitHub repo](https://github.com/csuwildcat/P401)
-~ [File an issue](https://github.com/csuwildcat/P401/issues)
-~ [Commit history](https://github.com/csuwildcat/P401/commits/main)
+~ [GitHub repo](https://github.com/csuwildcat/x401)
+~ [File an issue](https://github.com/csuwildcat/x401/issues)
+~ [Commit history](https://github.com/csuwildcat/x401/commits/main)
 
 ------------------------------------
 
 ## Abstract
 
-P401 defines an HTTP-based, route-scoped proof challenge protocol for requiring credential-based proof before access to a protected resource is granted.
+x401 defines an HTTP-based, route-scoped proof challenge protocol for requiring credential-based proof before access to a protected resource is granted.
 
-P401 uses:
+x401 uses:
 
 - **HTTP 401 Unauthorized** to signal that proof is required
 - **OpenID for Verifiable Presentations (OIDC4VP)** as the proof request and presentation mechanism
 - **OpenID for Verifiable Credential Issuance (OIDC4VCI)** for optional, non-authoritative issuance hints that help callers discover where qualifying credentials may be obtained
 
-P401 is intentionally separate from payment protocols. When payment is required, it MUST be handled with **HTTP 402 Payment Required** and an appropriate payment protocol. P401 MUST NOT redefine payment semantics.
+x401 is intentionally separate from payment protocols. When payment is required, it MUST be handled with **HTTP 402 Payment Required** and an appropriate payment protocol. x401 MUST NOT redefine payment semantics.
 
-This document defines the P401 envelope, processing rules, interoperability requirements, and examples for proof-only and proof-plus-payment flows.
+This document defines the x401 envelope, processing rules, interoperability requirements, and examples for proof-only and proof-plus-payment flows.
 
 ::: note Protocol Boundary
-P401 defines proof challenge semantics only. When payment is required, implementations still use `402 Payment Required` and a separate payment protocol.
+x401 defines proof challenge semantics only. When payment is required, implementations still use `402 Payment Required` and a separate payment protocol.
 :::
 
 ## Status of This Document
@@ -50,7 +50,7 @@ HTTP provides a standard challenge mechanism for authentication via `401 Unautho
 
 At the same time, the OpenID4VP and OIDC4VCI specifications define interoperable mechanisms for requesting presentations and issuing credentials, but they are not themselves an HTTP route challenge protocol.
 
-P401 fills that gap by defining an HTTP-native wrapper that:
+x401 fills that gap by defining an HTTP-native wrapper that:
 
 - signals proof requirements at the protected route
 - carries or references an OIDC4VP proof request
@@ -62,7 +62,7 @@ In the typical flow, a [[ref: Holder]] receives a challenge from a [[ref: Verifi
 
 ## Design Goals
 
-The goals of P401 are:
+The goals of x401 are:
 
 1. Define a route-scoped proof challenge for HTTP resources.
 2. Reuse existing proof and issuance standards where possible.
@@ -73,7 +73,7 @@ The goals of P401 are:
 
 ## Non-Goals
 
-P401 does not:
+x401 does not:
 
 - define a new credential format
 - replace OIDC4VP
@@ -101,7 +101,7 @@ The key words **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHALL NOT**, **
 [[def: Issuance Hint]]:
 ~ A non-authoritative hint describing where the caller may be able to obtain credentials through OIDC4VCI or a compatible issuance mechanism.
 
-[[def: P401 Envelope]]:
+[[def: x401 Envelope]]:
 ~ The JSON object defined by this specification and returned in the response body of a `401 Unauthorized` response.
 
 ## Protocol Overview
@@ -111,8 +111,8 @@ The key words **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHALL NOT**, **
 1. Client requests a protected route.
 2. The [[ref: Verifier]] determines that proof is required.
 3. The [[ref: Verifier]] returns `401 Unauthorized` with:
-   - `WWW-Authenticate: P401 ...`
-   - a [[ref: P401 Envelope]] in the response body
+   - `WWW-Authenticate: x401 ...`
+   - a [[ref: x401 Envelope]] in the response body
 4. The client fulfills the proof requirement using the embedded or referenced OIDC4VP [[ref: Proof Request]].
 5. The client retries the protected route with the resulting proof artifact or verifier-issued receipt.
 6. The [[ref: Verifier]] validates the proof and returns the protected resource if successful.
@@ -123,7 +123,7 @@ sequenceDiagram
     participant Verifier
     participant Wallet
     Client->>Verifier: Request protected route
-    Verifier-->>Client: 401 + WWW-Authenticate: P401 + envelope
+    Verifier-->>Client: 401 + WWW-Authenticate: x401 + envelope
     Client->>Wallet: Fulfill OIDC4VP request
     Wallet-->>Client: Presentation or receipt
     Client->>Verifier: Retry with proof artifact
@@ -132,11 +132,11 @@ sequenceDiagram
 
 ## OIDC Boundary and Reuse
 
-P401 stays intentionally narrow. It defines the HTTP challenge at the protected route and the envelope that carries proof and acquisition data. It does not redefine the OIDC objects carried inside that envelope.
+x401 stays intentionally narrow. It defines the HTTP challenge at the protected route and the envelope that carries proof and acquisition data. It does not redefine the OIDC objects carried inside that envelope.
 
 The protocol boundary is:
 
-1. P401 governs the protected-route exchange up to `401 Unauthorized`, `WWW-Authenticate: P401`, and the P401 envelope.
+1. x401 governs the protected-route exchange up to `401 Unauthorized`, `WWW-Authenticate: x401`, and the x401 envelope.
 2. OIDC4VP takes over as soon as the client processes `proof.request` or dereferences `proof.request_uri`.
    - In `by_value` mode, `proof.request` is a JSON representation of the OIDC4VP Authorization Request parameters and MUST preserve the original OIDC parameter names exactly. See OpenID4VP Section 5 and Section 8: <https://openid.net/specs/openid-4-verifiable-presentations-1_0-final.html>.
    - In `by_reference` mode, `proof.request_uri` is the OIDC4VP `request_uri` transport, and the dereferenced resource MUST satisfy OpenID4VP Section 5.7, Section 5.10.1, and RFC 9101: <https://openid.net/specs/openid-4-verifiable-presentations-1_0-final.html>, <https://datatracker.ietf.org/doc/html/rfc9101>.
@@ -144,14 +144,14 @@ The protocol boundary is:
    - `vp_token` response semantics: OpenID4VP Section 8.1.
    - `direct_post` and `response_uri`: OpenID4VP Section 8.2.
    - Verifier validation of `client_id` and `nonce` binding: OpenID4VP Section 8.6 and Section 14.1.2.
-4. P401 resumes only after the verifier has accepted the OIDC4VP result and the caller retries the original protected route with the expected retry artifact.
+4. x401 resumes only after the verifier has accepted the OIDC4VP result and the caller retries the original protected route with the expected retry artifact.
 5. `acquisition` never changes verification behavior. When it points to issuance, it points to standard OIDC4VCI objects such as a Credential Issuer Identifier, Credential Issuer Metadata, or a Credential Offer. See OpenID4VCI Section 4.1.3 and Section 12.2: <https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0-final.html>.
 
 ### Proof-Plus-Payment Flow
 
 1. Client requests a protected route.
 2. The [[ref: Verifier]] determines that proof is required.
-3. The [[ref: Verifier]] returns `401 Unauthorized` with a [[ref: P401 Envelope]] that may also declare that payment is required separately.
+3. The [[ref: Verifier]] returns `401 Unauthorized` with a [[ref: x401 Envelope]] that may also declare that payment is required separately.
 4. The client fulfills the proof requirement.
 5. The [[ref: Verifier]], or the protected route, determines that proof is satisfied but payment remains unsatisfied.
 6. The [[ref: Verifier]] returns `402 Payment Required` with payment protocol details.
@@ -166,7 +166,7 @@ sequenceDiagram
     participant Wallet
     participant Payment
     Client->>Verifier: Request protected route
-    Verifier-->>Client: 401 + P401 envelope
+    Verifier-->>Client: 401 + x401 envelope
     Client->>Wallet: Fulfill OIDC4VP request
     Wallet-->>Client: Presentation or receipt
     Client->>Verifier: Retry or complete proof flow
@@ -179,9 +179,9 @@ sequenceDiagram
 
 ## HTTP Semantics
 
-Status Code | Meaning in a P401-capable deployment | Client expectation
+Status Code | Meaning in a x401-capable deployment | Client expectation
 ----------- | ------------------------------------ | ------------------
-`401 Unauthorized` | Proof is required or not yet satisfied | Inspect `WWW-Authenticate: P401` and parse the envelope
+`401 Unauthorized` | Proof is required or not yet satisfied | Inspect `WWW-Authenticate: x401` and parse the envelope
 `402 Payment Required` | Payment remains unsatisfied | Switch to the payment protocol
 `403 Forbidden` | Proof was presented but policy satisfaction failed | Do not treat this as another challenge
 
@@ -189,24 +189,24 @@ Status Code | Meaning in a P401-capable deployment | Client expectation
 
 A server that requires proof for access to a protected resource MUST return `401 Unauthorized`.
 
-The response MUST include a `WWW-Authenticate` challenge using the `P401` scheme.
+The response MUST include a `WWW-Authenticate` challenge using the `x401` scheme.
 
 Example:
 
 ```http
 HTTP/1.1 401 Unauthorized
-WWW-Authenticate: P401 challenge_id="c-123"
+WWW-Authenticate: x401 challenge_id="c-123"
 Content-Type: application/json
 Cache-Control: no-store
 ```
 
-The response body MUST contain a P401 envelope.
+The response body MUST contain a x401 envelope.
 
 ### 402 for Payment
 
-A server that requires payment MUST use `402 Payment Required` and MUST NOT overload P401 to represent payment as proof.
+A server that requires payment MUST use `402 Payment Required` and MUST NOT overload x401 to represent payment as proof.
 
-Payment metadata MAY be declared in a P401 envelope for informational purposes when both proof and payment are required, but payment satisfaction itself remains governed by the payment protocol used with `402`.
+Payment metadata MAY be declared in a x401 envelope for informational purposes when both proof and payment are required, but payment satisfaction itself remains governed by the payment protocol used with `402`.
 
 ### 403 for Failed Policy Satisfaction
 
@@ -219,16 +219,16 @@ Examples include:
 - expired or revoked credential
 - insufficient assurance level
 
-## P401 Challenge Scheme
+## x401 Challenge Scheme
 
-The `WWW-Authenticate` header identifies the presence of a P401 challenge.
+The `WWW-Authenticate` header identifies the presence of a x401 challenge.
 
 ### Header Syntax
 
-A P401 challenge uses the following general form:
+A x401 challenge uses the following general form:
 
 ```http
-WWW-Authenticate: P401 challenge_id="c-123", request_ref="https://api.example.com/p401/requests/c-123"
+WWW-Authenticate: x401 challenge_id="c-123", request_ref="https://api.example.com/x401/requests/c-123"
 ```
 
 ### Header Parameters
@@ -240,15 +240,15 @@ Name | Definition
 `scope_ref` | An OPTIONAL reference to a route or policy scope description.
 `receipt_type` | An OPTIONAL hint describing the type of artifact the verifier expects on retry, for example `presentation`, `bearer-token`, or `proof-receipt`.
 
-## P401 Envelope
+## x401 Envelope
 
-A P401 response body MUST contain a single JSON object with the following top-level members.
+A x401 response body MUST contain a single JSON object with the following top-level members.
 
 ### Top-Level Members
 
 ```json
 {
-  "scheme": "P401",
+  "scheme": "x401",
   "version": "0.1.0",
   "challenge_id": "c-123",
   "scope": {},
@@ -263,8 +263,8 @@ A P401 response body MUST contain a single JSON object with the following top-le
 
 Name | Definition
 ---- | ----------
-`scheme` | REQUIRED. Value MUST be the string `"P401"`.
-`version` | REQUIRED. The P401 envelope version.
+`scheme` | REQUIRED. Value MUST be the string `"x401"`.
+`version` | REQUIRED. The x401 envelope version.
 `challenge_id` | OPTIONAL, but RECOMMENDED. If present, MUST match the `challenge_id` in the `WWW-Authenticate` header when that parameter is present.
 `scope` | REQUIRED. Describes the route or policy context for which proof is required.
 `proof` | REQUIRED. Contains an OIDC4VP request by value or by reference.
@@ -296,7 +296,7 @@ Name | Definition
 `route` | REQUIRED. The route or canonical route template.
 `method` | REQUIRED. The HTTP method to which the challenge applies.
 `resource_class` | OPTIONAL. A verifier-defined class describing the type of protected resource.
-`aud` | REQUIRED. The intended verifier or resource audience identifier for the protected route. This member is P401-specific context. It is not the OIDC4VP Request Object `aud` claim. If an OIDC4VP Request Object is used, its `aud` claim MUST follow OpenID4VP Section 5.8 rather than copying `scope.aud` verbatim: <https://openid.net/specs/openid-4-verifiable-presentations-1_0-final.html>.
+`aud` | REQUIRED. The intended verifier or resource audience identifier for the protected route. This member is x401-specific context. It is not the OIDC4VP Request Object `aud` claim. If an OIDC4VP Request Object is used, its `aud` claim MUST follow OpenID4VP Section 5.8 rather than copying `scope.aud` verbatim: <https://openid.net/specs/openid-4-verifiable-presentations-1_0-final.html>.
 
 ## Proof Object
 
@@ -320,7 +320,7 @@ or
   "request_format": "openid4vp",
   "mode": "by_reference",
   "client_id": "x509_san_dns:api.example.com",
-  "request_uri": "https://api.example.com/p401/requests/c-123",
+  "request_uri": "https://api.example.com/x401/requests/c-123",
   "request_uri_method": "get",
   "retry_artifact": "verifier_receipt"
 }
@@ -332,7 +332,7 @@ Name | Definition
 ---- | ----------
 `request_format` | REQUIRED. Value MUST be `"openid4vp"` for this version of the specification.
 `mode` | REQUIRED. MUST be either `by_value` or `by_reference`.
-`request` | REQUIRED when `mode` is `by_value`. Contains a complete OIDC4VP Authorization Request expressed as JSON members using the exact OIDC parameter names. Examples of members that remain inside `request` are `client_id`, `response_type`, `response_mode`, `response_uri`, `redirect_uri`, `nonce`, `state`, `dcql_query`, `scope`, and `client_metadata`. P401 MUST NOT rename or reinterpret those OIDC4VP members. See OpenID4VP Section 5 and Section 8: <https://openid.net/specs/openid-4-verifiable-presentations-1_0-final.html>.
+`request` | REQUIRED when `mode` is `by_value`. Contains a complete OIDC4VP Authorization Request expressed as JSON members using the exact OIDC parameter names. Examples of members that remain inside `request` are `client_id`, `response_type`, `response_mode`, `response_uri`, `redirect_uri`, `nonce`, `state`, `dcql_query`, `scope`, and `client_metadata`. x401 MUST NOT rename or reinterpret those OIDC4VP members. See OpenID4VP Section 5 and Section 8: <https://openid.net/specs/openid-4-verifiable-presentations-1_0-final.html>.
 `client_id` | REQUIRED when `mode` is `by_reference`. Contains the OIDC4VP `client_id` Authorization Request parameter that accompanies `request_uri`. See OpenID4VP Section 5.7 and Section 5.9: <https://openid.net/specs/openid-4-verifiable-presentations-1_0-final.html>.
 `request_uri` | REQUIRED when `mode` is `by_reference`. Contains the OIDC4VP `request_uri` value from which the Wallet obtains the Request Object. If dereferenced over HTTP, the returned object MUST satisfy OpenID4VP Section 5.10.1 and RFC 9101: <https://openid.net/specs/openid-4-verifiable-presentations-1_0-final.html>, <https://datatracker.ietf.org/doc/html/rfc9101>.
 `request_uri_method` | OPTIONAL. Contains the OIDC4VP `request_uri_method` parameter when the verifier expects POST-based Request URI retrieval. If omitted, Wallets use the default `request_uri` processing defined by RFC 9101 and OpenID4VP.
@@ -340,14 +340,14 @@ Name | Definition
 
 ## OIDC4VP Reuse Rules
 
-P401 implementations that use OIDC4VP:
+x401 implementations that use OIDC4VP:
 
 1. MUST use an OIDC4VP Authorization Request that is valid under OpenID4VP.
-2. MUST preserve the exact OIDC4VP parameter names inside the carried request and MUST NOT define P401 aliases for `response_uri`, `redirect_uri`, `response_mode`, `nonce`, `state`, `dcql_query`, `scope`, or `client_metadata`.
+2. MUST preserve the exact OIDC4VP parameter names inside the carried request and MUST NOT define x401 aliases for `response_uri`, `redirect_uri`, `response_mode`, `nonce`, `state`, `dcql_query`, `scope`, or `client_metadata`.
 3. MUST include an OIDC4VP `client_id`.
 4. MUST include a valid OIDC4VP `response_type` for the chosen flow.
 5. MUST include either `dcql_query` or `scope` representing a DCQL query, but not both.
-6. MUST use `response_uri` when `response_mode` is `direct_post`, and MUST NOT replace it with a P401-specific field.
+6. MUST use `response_uri` when `response_mode` is `direct_post`, and MUST NOT replace it with a x401-specific field.
 7. If `request_uri` is used, the dereferenced Request Object MUST be returned as `application/oauth-authz-req+jwt` and satisfy RFC 9101 processing.
 8. SHOULD include a fresh nonce in each request instance.
 9. SHOULD use short expiry windows when a signed Request Object is used.
@@ -365,7 +365,7 @@ P401 implementations that use OIDC4VP:
     "client_id": "x509_san_dns:api.example.com",
     "response_type": "vp_token",
     "response_mode": "direct_post",
-    "response_uri": "https://api.example.com/p401/complete/c-123",
+    "response_uri": "https://api.example.com/x401/complete/c-123",
     "nonce": "n-7f98d5",
     "state": "c-123",
     "dcql_query": {
@@ -396,7 +396,7 @@ P401 implementations that use OIDC4VP:
   "request_format": "openid4vp",
   "mode": "by_reference",
   "client_id": "x509_san_dns:api.example.com",
-  "request_uri": "https://api.example.com/p401/requests/c-123",
+  "request_uri": "https://api.example.com/x401/requests/c-123",
   "request_uri_method": "get",
   "retry_artifact": "verifier_receipt"
 }
@@ -461,7 +461,7 @@ Name | Definition
 
 ### OIDC4VCI Reuse Rules
 
-P401 acquisition hints that reference OIDC4VCI:
+x401 acquisition hints that reference OIDC4VCI:
 
 1. If `credential_issuer` is present, it MUST be the Credential Issuer Identifier, not the `/.well-known/openid-credential-issuer` URL.
 2. Wallets resolve metadata from `credential_issuer` using OpenID4VCI Section 12.2.2.
@@ -503,7 +503,7 @@ P401 acquisition hints that reference OIDC4VCI:
 
 ## Payment Object
 
-When both proof and payment are required, a P401 envelope MAY declare the existence of an additional payment requirement.
+When both proof and payment are required, a x401 envelope MAY declare the existence of an additional payment requirement.
 
 The payment object is informational and orchestration-oriented only. It does not replace `402 Payment Required`.
 
@@ -543,7 +543,7 @@ The invoke object contains optional wallet invocation hints. It is non-normative
   "wallet_links": [
     {
       "rel": "present",
-      "href": "https://wallet.example/present?request_uri=https%3A%2F%2Fapi.example.com%2Fp401%2Frequests%2Fc-123"
+      "href": "https://wallet.example/present?request_uri=https%3A%2F%2Fapi.example.com%2Fx401%2Frequests%2Fc-123"
     }
   ]
 }
@@ -551,30 +551,30 @@ The invoke object contains optional wallet invocation hints. It is non-normative
 
 ## Client Processing Rules
 
-A client receiving a `401 Unauthorized` response with a `WWW-Authenticate: P401 ...` challenge:
+A client receiving a `401 Unauthorized` response with a `WWW-Authenticate: x401 ...` challenge:
 
 1. MUST treat the response as a proof requirement.
-2. MUST parse the P401 envelope if the content type is JSON.
+2. MUST parse the x401 envelope if the content type is JSON.
 3. SHOULD inspect `scope` to determine applicability.
 4. MUST process the `proof` object to determine how to fulfill the requirement.
 5. MAY use `acquisition` hints to attempt credential discovery or issuance.
 6. MUST NOT treat acquisition hints as trusted issuer policy by themselves.
 7. MUST hand off OIDC members to standard OpenID4VP processing without renaming or reinterpretation.
 8. MAY invoke a wallet or agent subsystem to fulfill the OIDC4VP request.
-9. If `credential_offer_uri` is used, MUST follow the OIDC4VCI Credential Offer flow rather than a P401-defined issuance flow.
+9. If `credential_offer_uri` is used, MUST follow the OIDC4VCI Credential Offer flow rather than a x401-defined issuance flow.
 10. MAY retry the original route with:
    - a raw presentation, if the verifier expects that model, or
    - a verifier-issued receipt or bearer token, if the verifier uses an OIDC4VP response endpoint model
 
 ## Verifier Processing Rules
 
-A verifier implementing P401:
+A verifier implementing x401:
 
 1. MUST return `401 Unauthorized` when proof is required and unsatisfied.
-2. MUST include `WWW-Authenticate: P401 ...`.
-3. MUST include a valid P401 envelope in the response body.
+2. MUST include `WWW-Authenticate: x401 ...`.
+3. MUST include a valid x401 envelope in the response body.
 4. MUST ensure the embedded or referenced OIDC4VP request is valid.
-5. MUST NOT define P401-specific aliases for OIDC4VP request or response members.
+5. MUST NOT define x401-specific aliases for OIDC4VP request or response members.
 6. SHOULD include fresh nonce values in each request instance.
 7. SHOULD use short-lived expiries when signed Request Objects are used.
 8. MUST validate proofs according to the OIDC4VP and credential format rules it relies upon, including the required `client_id` and `nonce` binding checks.
@@ -584,7 +584,7 @@ A verifier implementing P401:
 
 ## Retry Models
 
-P401 supports two broad retry models.
+x401 supports two broad retry models.
 
 Model | Retry artifact | Best fit
 ----- | -------------- | --------
@@ -600,7 +600,7 @@ Example:
 ```http
 GET /restricted/resource HTTP/1.1
 Host: api.example.com
-Authorization: P401 proof="eyJhbGciOi..."
+Authorization: x401 proof="eyJhbGciOi..."
 ```
 
 ### Model B: Verifier Receipt Retry
@@ -632,14 +632,14 @@ Host: api.example.com
 
 ```http
 HTTP/1.1 401 Unauthorized
-WWW-Authenticate: P401 challenge_id="proof-001", receipt_type="verifier_receipt"
+WWW-Authenticate: x401 challenge_id="proof-001", receipt_type="verifier_receipt"
 Content-Type: application/json
 Cache-Control: no-store
 ```
 
 ```json
 {
-  "scheme": "P401",
+  "scheme": "x401",
   "version": "0.1.0",
   "challenge_id": "proof-001",
   "scope": {
@@ -656,7 +656,7 @@ Cache-Control: no-store
       "client_id": "x509_san_dns:api.example.com",
       "response_type": "vp_token",
       "response_mode": "direct_post",
-      "response_uri": "https://api.example.com/p401/complete/proof-001",
+      "response_uri": "https://api.example.com/x401/complete/proof-001",
       "nonce": "n-c8f5f6",
       "state": "proof-001",
       "dcql_query": {
@@ -720,14 +720,14 @@ Host: media.example.com
 
 ```http
 HTTP/1.1 401 Unauthorized
-WWW-Authenticate: P401 challenge_id="proof-002", request_ref="https://media.example.com/p401/requests/proof-002"
+WWW-Authenticate: x401 challenge_id="proof-002", request_ref="https://media.example.com/x401/requests/proof-002"
 Content-Type: application/json
 Cache-Control: no-store
 ```
 
 ```json
 {
-  "scheme": "P401",
+  "scheme": "x401",
   "version": "0.1.0",
   "challenge_id": "proof-002",
   "scope": {
@@ -741,7 +741,7 @@ Cache-Control: no-store
     "request_format": "openid4vp",
     "mode": "by_reference",
     "client_id": "x509_san_dns:media.example.com",
-    "request_uri": "https://media.example.com/p401/requests/proof-002",
+    "request_uri": "https://media.example.com/x401/requests/proof-002",
     "request_uri_method": "get",
     "retry_artifact": "verifier_receipt"
   },
@@ -771,7 +771,7 @@ Cache-Control: no-store
     "wallet_links": [
       {
         "rel": "present",
-        "href": "https://wallet.example/present?request_uri=https%3A%2F%2Fmedia.example.com%2Fp401%2Frequests%2Fproof-002"
+        "href": "https://wallet.example/present?request_uri=https%3A%2F%2Fmedia.example.com%2Fx401%2Frequests%2Fproof-002"
       }
     ]
   }
@@ -791,14 +791,14 @@ Host: api.example.com
 
 ```http
 HTTP/1.1 401 Unauthorized
-WWW-Authenticate: P401 challenge_id="proofpay-001"
+WWW-Authenticate: x401 challenge_id="proofpay-001"
 Content-Type: application/json
 Cache-Control: no-store
 ```
 
 ```json
 {
-  "scheme": "P401",
+  "scheme": "x401",
   "version": "0.1.0",
   "challenge_id": "proofpay-001",
   "scope": {
@@ -812,7 +812,7 @@ Cache-Control: no-store
     "request_format": "openid4vp",
     "mode": "by_reference",
     "client_id": "x509_san_dns:api.example.com",
-    "request_uri": "https://api.example.com/p401/requests/proofpay-001",
+    "request_uri": "https://api.example.com/x401/requests/proofpay-001",
     "request_uri_method": "get",
     "retry_artifact": "verifier_receipt"
   },
@@ -879,13 +879,13 @@ Payment-Signature: eyJwYXltZW50Ijoic2lnbmVkIn0
 
 ### Replay Prevention
 
-OIDC4VP requests used within P401 SHOULD include fresh nonce values and short expiries. Verifiers SHOULD reject stale or replayed proofs.
+OIDC4VP requests used within x401 SHOULD include fresh nonce values and short expiries. Verifiers SHOULD reject stale or replayed proofs.
 
 ### Audience Binding
 
 Returned presentations MUST be bound to the OIDC4VP `client_id` and `nonce` values used in the Authorization Request, as required by OpenID4VP Section 14.1.2.
 
-If a Request Object is used, its `aud` claim MUST follow OpenID4VP Section 5.8. `scope.aud` remains descriptive P401 context and does not override the OIDC4VP Request Object rules.
+If a Request Object is used, its `aud` claim MUST follow OpenID4VP Section 5.8. `scope.aud` remains descriptive x401 context and does not override the OIDC4VP Request Object rules.
 
 ### Issuer Trust
 
@@ -919,19 +919,19 @@ This draft does not yet request any IANA registrations.
 
 ## Conformance
 
-A conforming P401 verifier:
+A conforming x401 verifier:
 
 - returns `401 Unauthorized` when proof is required and unsatisfied
-- includes `WWW-Authenticate: P401 ...`
-- returns a valid P401 envelope
+- includes `WWW-Authenticate: x401 ...`
+- returns a valid x401 envelope
 - uses OIDC4VP for the proof request
 - optionally includes OIDC4VCI issuance hints
 - keeps payment separate under `402 Payment Required`
 
-A conforming P401 client:
+A conforming x401 client:
 
-- recognizes `WWW-Authenticate: P401`
-- processes the P401 envelope
+- recognizes `WWW-Authenticate: x401`
+- processes the x401 envelope
 - fulfills or escalates the OIDC4VP proof request
 - treats OIDC4VCI acquisition hints as optional and non-authoritative
 - supports separate handling of `402 Payment Required`
@@ -957,10 +957,10 @@ A conforming P401 client:
 
 ## Appendix A: Minimal Envelope
 
-::: example Minimal P401 Envelope
+::: example Minimal x401 Envelope
 ```json
 {
-  "scheme": "P401",
+  "scheme": "x401",
   "version": "0.1.0",
   "scope": {
     "route": "/resource/:id",
@@ -971,7 +971,7 @@ A conforming P401 client:
     "request_format": "openid4vp",
     "mode": "by_reference",
     "client_id": "x509_san_dns:api.example.com",
-    "request_uri": "https://api.example.com/p401/requests/c-123"
+    "request_uri": "https://api.example.com/x401/requests/c-123"
   }
 }
 ```
@@ -979,7 +979,7 @@ A conforming P401 client:
 
 ## Appendix B: Design Summary
 
-P401 is best understood as:
+x401 is best understood as:
 
 - an HTTP route challenge protocol
 - wrapping OIDC4VP for proof fulfillment

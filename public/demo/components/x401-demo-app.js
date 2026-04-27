@@ -1,5 +1,5 @@
 import { LitElement, css, html } from "lit";
-import "./p401-story-timeline.js";
+import "./x401-story-timeline.js";
 
 const PAPER_ROUTE = "/papers/medical-study-123";
 
@@ -68,7 +68,7 @@ function buildExpectedPacket(app, stepId) {
         route: PAPER_ROUTE,
         method: "GET",
         expected_status: 401,
-        expected_challenge: "P401 envelope with request_uri",
+        expected_challenge: "x401 envelope with request_uri",
       };
     case "request":
       return app.challengeRecord
@@ -78,7 +78,7 @@ function buildExpectedPacket(app, stepId) {
               app.challengeRecord.authorizationRequestPayload,
             requestObjectJwt: app.requestObjectJwt ?? "Pending request_uri fetch",
           }
-        : { waiting_on: "P401 challenge from the relying party" };
+        : { waiting_on: "x401 challenge from the relying party" };
     case "presentation":
       return app.challenge
         ? {
@@ -116,7 +116,7 @@ const STEP_BLUEPRINTS = [
     pendingNote:
       "The first request goes straight to the relying party and hits the proof gate on the paper route.",
     pendingOutcome:
-      "The verifier will answer with a P401 challenge, a request URI, and a credential acquisition hint.",
+      "The verifier will answer with a x401 challenge, a request URI, and a credential acquisition hint.",
     actionLabel: "Run the protected paper request",
     annotationPending: "Waiting for the first paper request.",
     annotationLocked: "This phase starts the story.",
@@ -142,13 +142,13 @@ const STEP_BLUEPRINTS = [
       app.requestObjectJwt = challengeRecord.requestObjectJwt;
 
       return {
-        annotation: "P401 challenge issued by the relying party.",
+        annotation: "x401 challenge issued by the relying party.",
         note:
           "The paper route blocked access and pushed the proof requirement out as a by-reference verifier challenge.",
         outcome:
           "The agent now holds a challenge ID, a request URI, and the issuer hint needed to continue.",
         highlights: [
-          `HTTP ${response.status} with WWW-Authenticate: P401`,
+          `HTTP ${response.status} with WWW-Authenticate: x401`,
           `Challenge ${envelope.challenge_id}`,
           `Request URI ${envelope.proof.request_uri}`,
         ],
@@ -332,7 +332,7 @@ const STEP_BLUEPRINTS = [
   },
 ];
 
-export class P401DemoApp extends LitElement {
+export class x401DemoApp extends LitElement {
   static properties = {
     overview: { type: Object },
     challenge: { type: Object },
@@ -776,7 +776,7 @@ export class P401DemoApp extends LitElement {
             <h1>Board-certified doctor opens gated medical research.</h1>
             <p>
               Shows how the doctor's AI agent proves active Texas board certification
-              through P401, OIDC4VP, and a locally delegated presentation to unlock
+              through x401, OIDC4VP, and a locally delegated presentation to unlock
               the protected paper route.
             </p>
             <div class="hero__route">
@@ -822,7 +822,7 @@ export class P401DemoApp extends LitElement {
               `
             : null}
 
-          <p401-story-timeline
+          <x401-story-timeline
             .items=${timelineItems}
             .selectedIndex=${this.selectedStepIndex}
             .completedIndex=${this.completedStepIndex}
@@ -830,11 +830,11 @@ export class P401DemoApp extends LitElement {
             @timeline-select=${(event) => this.handleTimelineSelect(event)}
             @timeline-back=${() => this.handleTimelineBack()}
             @timeline-action=${(event) => this.handleTimelineAction(event)}
-          ></p401-story-timeline>
+          ></x401-story-timeline>
         </section>
       </div>
     `;
   }
 }
 
-customElements.define("p401-demo-app", P401DemoApp);
+customElements.define("x401-demo-app", x401DemoApp);

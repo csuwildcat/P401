@@ -1,10 +1,10 @@
-export function buildP401AuthenticateHeader(options: {
+export function buildx401AuthenticateHeader(options: {
   challengeId: string;
   requestRef: string;
   receiptType?: string;
 }) {
   const receiptType = options.receiptType ?? "bearer-token";
-  return `P401 challenge_id="${options.challengeId}", request_ref="${options.requestRef}", receipt_type="${receiptType}"`;
+  return `x401 challenge_id="${options.challengeId}", request_ref="${options.requestRef}", receipt_type="${receiptType}"`;
 }
 
 export function buildMedicalStudyEnvelope(options: {
@@ -18,7 +18,7 @@ export function buildMedicalStudyEnvelope(options: {
   localWalletUri: string;
 }) {
   return {
-    scheme: "P401",
+    scheme: "x401",
     version: "0.1.0",
     challenge_id: options.challengeId,
     scope: {

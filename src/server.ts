@@ -206,5 +206,5 @@ app.get(DEMO_ROUTE, async (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`P401 demo listening on ${baseUrl}`);
+  console.log(`x401 demo listening on ${baseUrl}`);
 });

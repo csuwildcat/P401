@@ -1,9 +1,9 @@
 {
-  "name": "p401-spec",
+  "name": "x401",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Spec-Up configuration for the P401 specification",
+  "description": "Site, test implementation, and specification for the x401 proof-gated HTTP resource protocol",
   "scripts": {
     "demo:dev": "tsx watch src/server.ts",
     "demo:start": "tsx src/server.ts",

@@ -3,13 +3,13 @@
   "resource_path": "./www",
   "specs": [
     {
-      "title": "P401: HTTP Proof Challenge Protocol",
+      "title": "x401: HTTP Proof Challenge Protocol",
       "output_path": "./www/spec",
       "spec_directory": "./",
       "source": {
         "host": "github",
         "account": "csuwildcat",
-        "repo": "P401"
+        "repo": "x401"
       }
     }
   ]

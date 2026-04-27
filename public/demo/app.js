@@ -1,1 +1,1 @@
-import "./components/p401-demo-app.js";
+import "./components/x401-demo-app.js";

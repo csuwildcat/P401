@@ -4,7 +4,7 @@ function formatJson(value) {
   return JSON.stringify(value, null, 2);
 }
 
-export class P401StoryTimeline extends LitElement {
+export class x401StoryTimeline extends LitElement {
   static properties = {
     items: { type: Array },
     selectedIndex: { type: Number, attribute: "selected-index" },
@@ -646,4 +646,4 @@ export class P401StoryTimeline extends LitElement {
   }
 }
 
-customElements.define("p401-story-timeline", P401StoryTimeline);
+customElements.define("x401-story-timeline", x401StoryTimeline);

@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>P401 | HTTP Proof Challenge Protocol</title>
+    <title>x401 | HTTP Proof Challenge Protocol</title>
     <meta
       name="description"
-      content="P401 is an HTTP proof challenge protocol for protected routes. It uses 401, OIDC4VP, and optional OIDC4VCI hints to make credential-gated HTTP flows machine-readable."
+      content="x401 is an HTTP proof challenge protocol for protected routes. It uses 401, OIDC4VP, and optional OIDC4VCI hints to make credential-gated HTTP flows machine-readable."
     />
     <link
       rel="stylesheet"
@@ -23,9 +23,9 @@
 
     <header class="site-header" data-site-header>
       <div class="container site-header__inner">
-        <a class="brand" href="./" aria-label="P401 homepage">
+        <a class="brand" href="./" aria-label="x401 homepage">
           <span class="brand__chip pixel-border animate-pixel-shift">
-            <span>P401</span>
+            <span>x401</span>
           </span>
           <span class="brand__wordmark">Protocol</span>
         </a>
@@ -51,7 +51,7 @@
           <div class="site-header__actions">
             <a
               class="github-link"
-              href="https://github.com/csuwildcat/P401"
+              href="https://github.com/csuwildcat/x401"
               target="_blank"
               rel="noreferrer"
             >
@@ -74,7 +74,7 @@
           <div class="hero-copy">
             <h1 class="hero-title">
               <span class="hero-title__line">
-                <span class="hero-title__protocol">P401</span>: native proof challenges for
+                <span class="hero-title__protocol">x401</span>: native proof challenges for
               </span>
               <wa-carousel
                 class="hero-rotator"
@@ -84,7 +84,7 @@
                 loop
                 autoplay
                 autoplay-interval="4600"
-                aria-label="P401 protected resources"
+                aria-label="x401 protected resources"
                 aria-live="polite"
               >
                 <wa-carousel-item><span class="hero-rotator__item">APIs</span></wa-carousel-item>
@@ -96,7 +96,7 @@
 
             <p class="hero-copy__lede">
               A universal HTTP-based challenge flow that enables resource gating 
-              based on fulfillment of credential proof requirements. P401 reuses OIDC4VP and
+              based on fulfillment of credential proof requirements. x401 reuses OIDC4VP and
               optional OIDC4VCI hints, while leaving payment to 402 protocols.
             </p>
 
@@ -107,7 +107,7 @@
               <wa-button
                 variant="neutral"
                 appearance="outlined"
-                data-href="https://github.com/csuwildcat/P401"
+                data-href="https://github.com/csuwildcat/x401"
                 data-external="true"
               >
                 View on GitHub
@@ -120,7 +120,7 @@
                 <span class="info-card__icon" aria-hidden="true">
                   <wa-icon name="arrows-split-up-and-left"></wa-icon>
                 </span>
-                <h3>Route-Scoped Proof</h3>
+                <h3>Route-Scoped Gating</h3>
                 <p>
                   Challenge a single route or operation with a structured proof
                   contract instead of app-specific glue.
@@ -161,9 +161,9 @@
         <div class="section-pattern" aria-hidden="true"></div>
         <div class="container">
           <div class="section-heading">
-            <h2>How P401 Works</h2>
+            <h2>How x401 Works</h2>
             <p>
-              P401 mimics familiar HTTP challenge and retry flows using
+              x401 mimics familiar HTTP challenge and retry flows using
               <code>401 Unauthorized</code> as the protected-route proof boundary.
             </p>
           </div>
@@ -182,16 +182,34 @@
                   loop
                   autoplay
                   autoplay-interval="6200"
-                  aria-label="P401 flow steps"
+                  aria-label="x401 flow steps"
                 ></wa-carousel>
 
                 <div class="flow-controls">
-                  <button class="flow-button flow-button--neutral" id="flow-prev" type="button">
-                    Previous
+                  <button
+                    class="flow-button flow-button--neutral"
+                    id="flow-prev"
+                    type="button"
+                    aria-label="Previous step"
+                  >
+                    <span class="flow-button__icon" aria-hidden="true">
+                      <svg viewBox="0 0 16 16" fill="none">
+                        <path d="M9.5 3.5 5 8l4.5 4.5" />
+                      </svg>
+                    </span>
                   </button>
-                  <div class="flow-dots" id="flow-dots" aria-label="How P401 works steps"></div>
-                  <button class="flow-button flow-button--brand" id="flow-next" type="button">
-                    Next
+                  <div class="flow-dots" id="flow-dots" aria-label="How x401 works steps"></div>
+                  <button
+                    class="flow-button flow-button--brand"
+                    id="flow-next"
+                    type="button"
+                    aria-label="Next step"
+                  >
+                    <span class="flow-button__icon" aria-hidden="true">
+                      <svg viewBox="0 0 16 16" fill="none">
+                        <path d="M6.5 3.5 11 8l-4.5 4.5" />
+                      </svg>
+                    </span>
                   </button>
                 </div>
               </div>
@@ -206,7 +224,7 @@
           <div class="section-heading">
             <h2>Key Features</h2>
             <p>
-              P401 covers the protected-route contract that existing identity and
+              x401 covers the protected-route contract that existing identity and
               issuance specs leave open.
             </p>
           </div>
@@ -218,7 +236,7 @@
                 <h3>HTTP-Native Challenge</h3>
                 <p>
                   Uses <code>401 Unauthorized</code> and
-                  <code>WWW-Authenticate: P401</code> as the route-facing protocol
+                  <code>WWW-Authenticate: x401</code> as the route-facing protocol
                   boundary.
                 </p>
               </div>
@@ -262,7 +280,7 @@
                 <span class="feature-card__icon">402</span>
                 <h3>Separate From Payment</h3>
                 <p>
-                  Keeps proof semantics under P401 and leaves payment semantics to
+                  Keeps proof semantics under x401 and leaves payment semantics to
                   <code>402 Payment Required</code> and a dedicated payment
                   protocol.
                 </p>
@@ -290,7 +308,7 @@
 
             <h2>Technology Comparison</h2>
             <p>
-              P401 is not a replacement for OIDC4VP or OIDC4VCI. It is the missing
+              x401 is not a replacement for OIDC4VP or OIDC4VCI. It is the missing
               HTTP route contract that lets those capabilities show up where access
               decisions are actually made.
             </p>
@@ -339,7 +357,7 @@
                       <th>OAuth</th>
                       <th>OIDC VP/VCI</th>
                       <th>DIDComm</th>
-                      <th>P401</th>
+                      <th>x401</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -402,7 +420,7 @@
       <section class="cta-section">
         <div class="container">
           <div class="cta-panel">
-            <h2>Ready to implement P401?</h2>
+            <h2>Ready to implement x401?</h2>
             <p>
               Start with the draft spec, inspect the protocol model, and keep the
               demo isolated while the project site becomes the primary entry point.
@@ -426,7 +444,7 @@
         <div class="site-footer__brand">
           <div class="brand brand--footer">
             <span class="brand__chip pixel-border">
-              <span>P401</span>
+              <span>x401</span>
             </span>
             <span class="brand__wordmark">Protocol</span>
           </div>
@@ -442,7 +460,7 @@
           <a href="#features">Key Features</a>
           <a href="spec/">Specification</a>
           <a href="demo/">Demo</a>
-          <a href="https://github.com/csuwildcat/P401" target="_blank" rel="noreferrer">
+          <a href="https://github.com/csuwildcat/x401" target="_blank" rel="noreferrer">
             GitHub
           </a>
         </div>
@@ -450,7 +468,7 @@
 
       <div class="site-footer__meta">
         <div class="container">
-          <p>© <span data-current-year></span> P401 Protocol</p>
+          <p>© <span data-current-year></span> x401 Protocol</p>
         </div>
       </div>
     </footer>
