@@ -256,7 +256,6 @@ Name | Definition
 ---- | ----------
 `challenge_id` | A verifier-generated identifier for the challenge instance. It MUST be unique within the verifier's operational scope for the lifetime of the challenge, MAY be omitted if the verifier uses only by-value requests and does not require challenge correlation, and SHOULD be included when the verifier uses by-reference requests, OIDC4VP response endpoints, or proof-plus-payment orchestration.
 `request_ref` | An OPTIONAL URL reference for retrieving a proof request or related metadata. When the `proof` object uses `mode: "by_reference"`, `request_ref` SHOULD match `proof.request_uri`.
-`scope_ref` | An OPTIONAL reference to a route or policy scope description.
 `retry_artifact` | An OPTIONAL hint describing the type of artifact the verifier expects on retry, for example `raw_presentation` or `verification_token`.
 
 ## x401 Envelope
@@ -270,7 +269,6 @@ A x401 response body MUST contain a single JSON object with the following top-le
   "scheme": "x401",
   "version": "0.1.0",
   "challenge_id": "c-123",
-  "scope": {},
   "proof": {},
   "acquisition": {},
   "payment": {}
@@ -284,36 +282,9 @@ Name | Definition
 `scheme` | REQUIRED. Value MUST be the string `"x401"`.
 `version` | REQUIRED. The x401 envelope version.
 `challenge_id` | OPTIONAL, but RECOMMENDED. If present, MUST match the `challenge_id` in the `WWW-Authenticate` header when that parameter is present.
-`scope` | REQUIRED. Describes the route or policy context for which proof is required.
 `proof` | REQUIRED. Contains an OIDC4VP request by value or by reference.
 `acquisition` | OPTIONAL. Contains issuance hints, including OIDC4VCI discovery pointers.
 `payment` | OPTIONAL. Describes that payment is additionally required, without replacing `402` semantics.
-
-## Scope Object
-
-The scope object describes what protected route or policy the proof requirement applies to.
-
-### Example
-
-```json
-{
-  "policy_id": "premium-dataset-access-v3",
-  "route": "/datasets/:datasetId",
-  "method": "GET",
-  "resource_class": "premium_dataset",
-  "aud": "did:web:api.example.com"
-}
-```
-
-### Scope Members
-
-Name | Definition
----- | ----------
-`policy_id` | OPTIONAL, but RECOMMENDED. A stable identifier for the verifier policy.
-`route` | REQUIRED. The route or canonical route template.
-`method` | REQUIRED. The HTTP method to which the challenge applies.
-`resource_class` | OPTIONAL. A verifier-defined class describing the type of protected resource.
-`aud` | REQUIRED. The intended verifier or resource audience identifier for the protected route. This member is x401-specific context. It is not the OIDC4VP Request Object `aud` claim. If an OIDC4VP Request Object is used, its `aud` claim MUST follow OpenID4VP Section 5.8 rather than copying `scope.aud` verbatim: <https://openid.net/specs/openid-4-verifiable-presentations-1_0-final.html>.
 
 ## Proof Object
 
@@ -400,7 +371,7 @@ x401 implementations that use OIDC4VP:
 7. If `request_uri` is used, the dereferenced Request Object MUST be returned as `application/oauth-authz-req+jwt` and satisfy RFC 9101 processing.
 8. SHOULD include a fresh nonce in each request instance.
 9. SHOULD use short expiry windows when a signed Request Object is used.
-10. If a Request Object is used, its `aud` claim MUST follow OpenID4VP Section 5.8 rather than copying `scope.aud`.
+10. If a Request Object is used, its `aud` claim MUST follow OpenID4VP Section 5.8.
 11. SHOULD prefer a verifier-issued [[ref: Verification Token]] for subsequent route retry when doing multi-step, browser-centric, or delegated-presenter flows.
 
 ### By-Value Proof Example
@@ -660,18 +631,17 @@ A client receiving a `401 Unauthorized` response with a `WWW-Authenticate: x401 
 
 1. MUST treat the response as a proof requirement.
 2. MUST parse the x401 envelope if the content type is JSON.
-3. SHOULD inspect `scope` to determine applicability.
-4. MUST process the `proof` object to determine how to fulfill the requirement.
-5. MAY use `acquisition` hints to attempt credential discovery or issuance.
-6. MUST NOT treat acquisition hints as trusted issuer policy by themselves.
-7. MUST hand off OIDC members to standard OpenID4VP processing without renaming or reinterpretation.
-8. MAY invoke a wallet or agent subsystem to fulfill the OIDC4VP request.
-9. If `credential_offer_uri` is used, MUST follow the OIDC4VCI Credential Offer flow rather than a x401-defined issuance flow.
-10. If acting as a [[ref: Delegated Presenter]], MUST submit the requested [[ref: Delegation Evidence]] with the OIDC4VP response in the same verifier transaction.
-11. MAY retry the original route with:
+3. MUST process the `proof` object to determine how to fulfill the requirement.
+4. MAY use `acquisition` hints to attempt credential discovery or issuance.
+5. MUST NOT treat acquisition hints as trusted issuer policy by themselves.
+6. MUST hand off OIDC members to standard OpenID4VP processing without renaming or reinterpretation.
+7. MAY invoke a wallet or agent subsystem to fulfill the OIDC4VP request.
+8. If `credential_offer_uri` is used, MUST follow the OIDC4VCI Credential Offer flow rather than a x401-defined issuance flow.
+9. If acting as a [[ref: Delegated Presenter]], MUST submit the requested [[ref: Delegation Evidence]] with the OIDC4VP response in the same verifier transaction.
+10. MAY retry the original route with:
    - a raw presentation, if the verifier expects that model, or
    - a verifier-issued [[ref: Verification Token]], if the verifier uses an OIDC4VP response endpoint model
-12. MUST send a [[ref: Verification Token]] in the `Authorization` request header when retrying with a token.
+11. MUST send a [[ref: Verification Token]] in the `Authorization` request header when retrying with a token.
 
 ## Verifier Processing Rules
 
@@ -811,13 +781,6 @@ Cache-Control: no-store
   "scheme": "x401",
   "version": "0.1.0",
   "challenge_id": "proof-001",
-  "scope": {
-    "policy_id": "active-member-report-access-v1",
-    "route": "/reports/quarterly",
-    "method": "GET",
-    "resource_class": "member_report",
-    "aud": "did:web:api.example.com"
-  },
   "proof": {
     "request_format": "openid4vp",
     "mode": "by_value",
@@ -899,13 +862,6 @@ Cache-Control: no-store
   "scheme": "x401",
   "version": "0.1.0",
   "challenge_id": "proof-002",
-  "scope": {
-    "policy_id": "age-gate-v1",
-    "route": "/adult-content/video/:id",
-    "method": "GET",
-    "resource_class": "age_restricted_media",
-    "aud": "did:web:media.example.com"
-  },
   "proof": {
     "request_format": "openid4vp",
     "mode": "by_reference",
@@ -957,13 +913,6 @@ Cache-Control: no-store
   "scheme": "x401",
   "version": "0.1.0",
   "challenge_id": "proofpay-001",
-  "scope": {
-    "policy_id": "premium-dataset-accredited-v2",
-    "route": "/datasets/premium/:id",
-    "method": "GET",
-    "resource_class": "premium_dataset",
-    "aud": "did:web:api.example.com"
-  },
   "proof": {
     "request_format": "openid4vp",
     "mode": "by_reference",
@@ -1158,7 +1107,7 @@ OIDC4VP requests used within x401 SHOULD include fresh nonce values and short ex
 
 Returned presentations MUST be bound to the OIDC4VP `client_id` and `nonce` values used in the Authorization Request, as required by OpenID4VP Section 14.1.2.
 
-If a Request Object is used, its `aud` claim MUST follow OpenID4VP Section 5.8. `scope.aud` remains descriptive x401 context and does not override the OIDC4VP Request Object rules.
+If a Request Object is used, its `aud` claim MUST follow OpenID4VP Section 5.8.
 
 ### Issuer Trust
 
@@ -1250,11 +1199,6 @@ A conforming x401 client:
 {
   "scheme": "x401",
   "version": "0.1.0",
-  "scope": {
-    "route": "/resource/:id",
-    "method": "GET",
-    "aud": "did:web:api.example.com"
-  },
   "proof": {
     "request_format": "openid4vp",
     "mode": "by_reference",

@@ -377,7 +377,6 @@ export class DemoService {
       challengeId,
       requestUri,
       clientId: this.actors.relyingParty.did,
-      relyingPartyDid: this.actors.relyingParty.did,
       issuerDid: this.actors.issuer.did,
       credentialIssuer: this.dataset.credentialIssuer,
       credentialOfferUri: this.dataset.credentialOfferUri,

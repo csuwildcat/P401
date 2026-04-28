@@ -11,7 +11,6 @@ export function buildMedicalStudyEnvelope(options: {
   challengeId: string;
   requestUri: string;
   clientId: string;
-  relyingPartyDid: string;
   issuerDid: string;
   credentialIssuer: string;
   credentialOfferUri: string;
@@ -20,13 +19,6 @@ export function buildMedicalStudyEnvelope(options: {
     scheme: "x401",
     version: "0.1.0",
     challenge_id: options.challengeId,
-    scope: {
-      policy_id: "board-certified-doctor-access-v1",
-      route: "/papers/medical-study-123",
-      method: "GET",
-      resource_class: "medical_research_paper",
-      aud: options.relyingPartyDid,
-    },
     proof: {
       request_format: "openid4vp",
       mode: "by_reference",
