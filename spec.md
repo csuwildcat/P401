@@ -247,7 +247,7 @@ The `WWW-Authenticate` header identifies the presence of a x401 challenge.
 A x401 challenge uses the following general form:
 
 ```http
-WWW-Authenticate: x401 challenge_id="c-123", request_ref="https://api.example.com/x401/requests/c-123", retry_artifact="verification_token"
+WWW-Authenticate: x401 challenge_id="c-123", request_ref="https://research.example.com/x401/requests/c-123", retry_artifact="verification_token"
 ```
 
 ### Header Parameters
@@ -297,9 +297,9 @@ The proof object carries or references the OIDC4VP request.
   "request_format": "openid4vp",
   "mode": "by_value",
   "request": {},
-  "request_id": "proof-template-active-member-v1",
+  "request_id": "proof-template-board-certified-doctor-v1",
   "satisfied_requirements": [
-    "urn:example:x401:satisfaction:active-member:v1"
+    "urn:example:x401:satisfaction:board-certified-doctor:v1"
   ],
   "delegation": {
     "mode": "accepted",
@@ -317,12 +317,12 @@ or
 {
   "request_format": "openid4vp",
   "mode": "by_reference",
-  "client_id": "x509_san_dns:api.example.com",
-  "request_uri": "https://api.example.com/x401/requests/c-123",
+  "client_id": "x509_san_dns:research.example.com",
+  "request_uri": "https://research.example.com/x401/requests/c-123",
   "request_uri_method": "get",
-  "request_id": "proof-template-active-member-v1",
+  "request_id": "proof-template-board-certified-doctor-v1",
   "satisfied_requirements": [
-    "urn:example:x401:satisfaction:active-member:v1"
+    "urn:example:x401:satisfaction:board-certified-doctor:v1"
   ],
   "delegation": {
     "mode": "accepted",
@@ -382,30 +382,37 @@ x401 implementations that use OIDC4VP:
   "request_format": "openid4vp",
   "mode": "by_value",
   "request": {
-    "client_id": "x509_san_dns:api.example.com",
+    "client_id": "x509_san_dns:research.example.com",
     "response_type": "vp_token",
     "response_mode": "direct_post",
-    "response_uri": "https://api.example.com/x401/complete/c-123",
+    "response_uri": "https://research.example.com/x401/complete/c-123",
     "nonce": "n-7f98d5",
     "state": "c-123",
     "dcql_query": {
       "credentials": [
         {
-          "id": "over18",
-          "format": "dc+sd-jwt",
+          "id": "boardCertification",
+          "format": "jwt_vc_json",
+          "meta": {
+            "type_values": ["BoardCertificationCredential"]
+          },
           "claims": [
             {
-              "path": ["age_over_18"],
-              "equals": true
+              "path": ["credentialSubject", "boardCertification", "status"],
+              "values": ["active"]
+            },
+            {
+              "path": ["credentialSubject", "boardCertification", "state"],
+              "values": ["Texas"]
             }
           ]
         }
       ]
     }
   },
-  "request_id": "proof-template-over18-v1",
+  "request_id": "proof-template-board-certified-doctor-v1",
   "satisfied_requirements": [
-    "urn:example:x401:satisfaction:over18:v1"
+    "urn:example:x401:satisfaction:board-certified-doctor:v1"
   ],
   "retry_artifact": "verification_token"
 }
@@ -419,12 +426,12 @@ x401 implementations that use OIDC4VP:
 {
   "request_format": "openid4vp",
   "mode": "by_reference",
-  "client_id": "x509_san_dns:api.example.com",
-  "request_uri": "https://api.example.com/x401/requests/c-123",
+  "client_id": "x509_san_dns:research.example.com",
+  "request_uri": "https://research.example.com/x401/requests/c-123",
   "request_uri_method": "get",
-  "request_id": "proof-template-over18-v1",
+  "request_id": "proof-template-board-certified-doctor-v1",
   "satisfied_requirements": [
-    "urn:example:x401:satisfaction:over18:v1"
+    "urn:example:x401:satisfaction:board-certified-doctor:v1"
   ],
   "retry_artifact": "verification_token"
 }
@@ -466,15 +473,15 @@ The following fields define the x401 delegation authorization semantics. Concret
     "id": "did:web:agent.example",
     "verification_method": "did:web:agent.example#key-1"
   },
-  "audiences": ["https://api.example.com"],
-  "credential_types": ["MembershipCredential"],
-  "credential_formats": ["dc+sd-jwt"],
-  "credential_issuers": ["did:web:issuer.example"],
-  "claims": ["membership_active"],
+  "audiences": ["https://research.example.com"],
+  "credential_types": ["BoardCertificationCredential"],
+  "credential_formats": ["jwt_vc_json"],
+  "credential_issuers": ["did:web:medical-board.example"],
+  "claims": ["credentialSubject.boardCertification.status"],
   "satisfied_requirements": [
-    "urn:example:x401:satisfaction:active-member:v1"
+    "urn:example:x401:satisfaction:board-certified-doctor:v1"
   ],
-  "resource_classes": ["member_report"],
+  "resource_classes": ["medical_research_paper"],
   "nbf": 1735689600,
   "exp": 1767225600,
   "jti": "urn:uuid:8f4f6c2e-7c31-4f54-9ad7-5f9c2d3d0c66",
@@ -519,13 +526,13 @@ The acquisition object MUST NOT redefine or weaken verifier policy. It is inform
 {
   "credentials": [
     {
-      "type": "Over18Credential",
+      "type": "BoardCertificationCredential",
       "issuers": [
         {
-          "id": "did:web:issuer.example",
-          "credential_issuer": "https://issuer.example",
-          "credential_offer_uri": "https://issuer.example/credential-offers/over18",
-          "formats": ["dc+sd-jwt"]
+          "id": "did:web:medical-board.example",
+          "credential_issuer": "https://medical-board.example",
+          "credential_offer_uri": "https://medical-board.example/credential-offers/board-certification",
+          "formats": ["jwt_vc_json"]
         }
       ]
     }
@@ -577,21 +584,21 @@ x401 acquisition hints that reference OIDC4VCI:
 {
   "credentials": [
     {
-      "type": "AccreditedInvestorCredential",
+      "type": "BoardCertificationCredential",
       "issuers": [
         {
-          "id": "did:web:accredited.example",
-          "credential_issuer": "https://accredited.example",
-          "credential_offer_uri": "https://accredited.example/credential-offers/accredited-investor",
+          "id": "did:web:medical-board.example",
+          "credential_issuer": "https://medical-board.example",
+          "credential_offer_uri": "https://medical-board.example/credential-offers/board-certification",
           "authorization_servers": [
-            "https://accredited.example/oauth"
+            "https://medical-board.example/oauth"
           ],
           "formats": [
-            "dc+sd-jwt"
+            "jwt_vc_json"
           ],
           "credential_configurations_supported": {
-            "AccreditedInvestorCredential": {
-              "format": "dc+sd-jwt"
+            "BoardCertificationCredential": {
+              "format": "jwt_vc_json"
             }
           }
         }
@@ -678,7 +685,7 @@ Example:
 
 ```http
 GET /restricted/resource HTTP/1.1
-Host: api.example.com
+Host: research.example.com
 Authorization: x401 proof="eyJhbGciOi..."
 ```
 
@@ -690,7 +697,7 @@ Retry example:
 
 ```http
 GET /restricted/resource HTTP/1.1
-Host: api.example.com
+Host: research.example.com
 Authorization: Bearer eyJhbGciOi...
 ```
 
@@ -718,9 +725,9 @@ When a verifier returns a [[ref: Verification Token]] from a x401 completion end
   "verification_token": "eyJhbGciOi...",
   "expires_in": 300,
   "challenge_id": "proof-001",
-  "request_id": "proof-template-active-member-v1",
+  "request_id": "proof-template-board-certified-doctor-v1",
   "satisfied_requirements": [
-    "urn:example:x401:satisfaction:active-member:v1"
+    "urn:example:x401:satisfaction:board-certified-doctor:v1"
   ]
 }
 ```
@@ -763,8 +770,8 @@ Clients MAY use the `satisfied_requirements` metadata returned with a [[ref: Ver
 ### Initial Request
 
 ```http
-GET /reports/quarterly HTTP/1.1
-Host: api.example.com
+GET /papers/medical-study-123 HTTP/1.1
+Host: research.example.com
 ```
 
 ### Response
@@ -785,21 +792,28 @@ Cache-Control: no-store
     "request_format": "openid4vp",
     "mode": "by_value",
     "request": {
-      "client_id": "x509_san_dns:api.example.com",
+      "client_id": "x509_san_dns:research.example.com",
       "response_type": "vp_token",
       "response_mode": "direct_post",
-      "response_uri": "https://api.example.com/x401/complete/proof-001",
+      "response_uri": "https://research.example.com/x401/complete/proof-001",
       "nonce": "n-c8f5f6",
       "state": "proof-001",
       "dcql_query": {
         "credentials": [
           {
-            "id": "membership",
-            "format": "dc+sd-jwt",
+            "id": "boardCertification",
+            "format": "jwt_vc_json",
+            "meta": {
+              "type_values": ["BoardCertificationCredential"]
+            },
             "claims": [
               {
-                "path": ["membership_active"],
-                "equals": true
+                "path": ["credentialSubject", "boardCertification", "status"],
+                "values": ["active"]
+              },
+              {
+                "path": ["credentialSubject", "boardCertification", "state"],
+                "values": ["Texas"]
               }
             ]
           }
@@ -811,17 +825,17 @@ Cache-Control: no-store
   "acquisition": {
     "credentials": [
       {
-        "type": "MembershipCredential",
+        "type": "BoardCertificationCredential",
         "issuers": [
           {
-            "id": "did:web:issuer.example",
-            "credential_issuer": "https://issuer.example",
-            "credential_offer_uri": "https://issuer.example/credential-offers/membership",
+            "id": "did:web:medical-board.example",
+            "credential_issuer": "https://medical-board.example",
+            "credential_offer_uri": "https://medical-board.example/credential-offers/board-certification",
             "authorization_servers": [
-              "https://issuer.example/oauth"
+              "https://medical-board.example/oauth"
             ],
             "formats": [
-              "dc+sd-jwt"
+              "jwt_vc_json"
             ]
           }
         ]
@@ -834,8 +848,8 @@ Cache-Control: no-store
 ### Successful Retry
 
 ```http
-GET /reports/quarterly HTTP/1.1
-Host: api.example.com
+GET /papers/medical-study-123 HTTP/1.1
+Host: research.example.com
 Authorization: Bearer eyJhbGciOi...
 ```
 
@@ -844,15 +858,15 @@ Authorization: Bearer eyJhbGciOi...
 ### Initial Request
 
 ```http
-GET /adult-content/video/123 HTTP/1.1
-Host: media.example.com
+GET /papers/medical-study-123 HTTP/1.1
+Host: research.example.com
 ```
 
 ### Response
 
 ```http
 HTTP/1.1 401 Unauthorized
-WWW-Authenticate: x401 challenge_id="proof-002", request_ref="https://media.example.com/x401/requests/proof-002", retry_artifact="verification_token"
+WWW-Authenticate: x401 challenge_id="proof-002", request_ref="https://research.example.com/x401/requests/proof-002", retry_artifact="verification_token"
 Content-Type: application/json
 Cache-Control: no-store
 ```
@@ -865,22 +879,26 @@ Cache-Control: no-store
   "proof": {
     "request_format": "openid4vp",
     "mode": "by_reference",
-    "client_id": "x509_san_dns:media.example.com",
-    "request_uri": "https://media.example.com/x401/requests/proof-002",
+    "client_id": "x509_san_dns:research.example.com",
+    "request_uri": "https://research.example.com/x401/requests/proof-002",
     "request_uri_method": "get",
+    "request_id": "proof-template-board-certified-doctor-v1",
+    "satisfied_requirements": [
+      "urn:example:x401:satisfaction:board-certified-doctor:v1"
+    ],
     "retry_artifact": "verification_token"
   },
   "acquisition": {
     "credentials": [
       {
-        "type": "Over18Credential",
+        "type": "BoardCertificationCredential",
         "issuers": [
           {
-            "id": "did:web:age-issuer.example",
-            "credential_issuer": "https://age-issuer.example",
-            "credential_offer_uri": "https://age-issuer.example/credential-offers/over18",
+            "id": "did:web:medical-board.example",
+            "credential_issuer": "https://medical-board.example",
+            "credential_offer_uri": "https://medical-board.example/credential-offers/board-certification",
             "formats": [
-              "dc+sd-jwt"
+              "jwt_vc_json"
             ]
           }
         ]
@@ -895,8 +913,8 @@ Cache-Control: no-store
 ### Initial Request
 
 ```http
-GET /datasets/premium/42 HTTP/1.1
-Host: api.example.com
+GET /papers/premium-medical-study-42 HTTP/1.1
+Host: research.example.com
 ```
 
 ### Initial Response: Proof Required
@@ -916,25 +934,29 @@ Cache-Control: no-store
   "proof": {
     "request_format": "openid4vp",
     "mode": "by_reference",
-    "client_id": "x509_san_dns:api.example.com",
-    "request_uri": "https://api.example.com/x401/requests/proofpay-001",
+    "client_id": "x509_san_dns:research.example.com",
+    "request_uri": "https://research.example.com/x401/requests/proofpay-001",
     "request_uri_method": "get",
+    "request_id": "proof-template-board-certified-doctor-v1",
+    "satisfied_requirements": [
+      "urn:example:x401:satisfaction:board-certified-doctor:v1"
+    ],
     "retry_artifact": "verification_token"
   },
   "acquisition": {
     "credentials": [
       {
-        "type": "AccreditedInvestorCredential",
+        "type": "BoardCertificationCredential",
         "issuers": [
           {
-            "id": "did:web:accredited.example",
-            "credential_issuer": "https://accredited.example",
-            "credential_offer_uri": "https://accredited.example/credential-offers/accredited-investor",
+            "id": "did:web:medical-board.example",
+            "credential_issuer": "https://medical-board.example",
+            "credential_offer_uri": "https://medical-board.example/credential-offers/board-certification",
             "authorization_servers": [
-              "https://accredited.example/oauth"
+              "https://medical-board.example/oauth"
             ],
             "formats": [
-              "dc+sd-jwt"
+              "jwt_vc_json"
             ]
           }
         ]
@@ -965,7 +987,7 @@ Cache-Control: no-store
     "scheme": "x402",
     "amount": "0.25",
     "currency": "USD",
-    "description": "Premium dataset access"
+    "description": "Premium medical study access"
   }
 }
 ```
@@ -975,8 +997,8 @@ Cache-Control: no-store
 The payment artifact is carried according to the selected payment protocol.
 
 ```http
-GET /datasets/premium/42 HTTP/1.1
-Host: api.example.com
+GET /papers/premium-medical-study-42 HTTP/1.1
+Host: research.example.com
 Authorization: Bearer eyJhbGciOi...
 ```
 
@@ -991,30 +1013,37 @@ In this example, `did:web:agent.example` is presenting on behalf of a user. The 
   "request_format": "openid4vp",
   "mode": "by_value",
   "request": {
-    "client_id": "x509_san_dns:api.example.com",
+    "client_id": "x509_san_dns:research.example.com",
     "response_type": "vp_token",
     "response_mode": "direct_post",
-    "response_uri": "https://api.example.com/x401/complete/proof-agent-001",
+    "response_uri": "https://research.example.com/x401/complete/proof-agent-001",
     "nonce": "n-agent-58f01",
     "state": "proof-agent-001",
     "dcql_query": {
       "credentials": [
         {
-          "id": "membership",
-          "format": "dc+sd-jwt",
+          "id": "boardCertification",
+          "format": "jwt_vc_json",
+          "meta": {
+            "type_values": ["BoardCertificationCredential"]
+          },
           "claims": [
             {
-              "path": ["membership_active"],
-              "equals": true
+              "path": ["credentialSubject", "boardCertification", "status"],
+              "values": ["active"]
+            },
+            {
+              "path": ["credentialSubject", "boardCertification", "state"],
+              "values": ["Texas"]
             }
           ]
         }
       ]
     }
   },
-  "request_id": "proof-template-active-member-v1",
+  "request_id": "proof-template-board-certified-doctor-v1",
   "satisfied_requirements": [
-    "urn:example:x401:satisfaction:active-member:v1"
+    "urn:example:x401:satisfaction:board-certified-doctor:v1"
   ],
   "delegation": {
     "mode": "accepted",
@@ -1039,15 +1068,15 @@ The user or wallet authorization tool previously created a durable delegation au
     "id": "did:web:agent.example",
     "verification_method": "did:web:agent.example#key-1"
   },
-  "audiences": ["https://api.example.com"],
-  "credential_types": ["MembershipCredential"],
-  "credential_formats": ["dc+sd-jwt"],
-  "credential_issuers": ["did:web:issuer.example"],
-  "claims": ["membership_active"],
+  "audiences": ["https://research.example.com"],
+  "credential_types": ["BoardCertificationCredential"],
+  "credential_formats": ["jwt_vc_json"],
+  "credential_issuers": ["did:web:medical-board.example"],
+  "claims": ["credentialSubject.boardCertification.status"],
   "satisfied_requirements": [
-    "urn:example:x401:satisfaction:active-member:v1"
+    "urn:example:x401:satisfaction:board-certified-doctor:v1"
   ],
-  "resource_classes": ["member_report"],
+  "resource_classes": ["medical_research_paper"],
   "nbf": 1735689600,
   "exp": 1767225600,
   "jti": "urn:uuid:8f4f6c2e-7c31-4f54-9ad7-5f9c2d3d0c66",
@@ -1060,10 +1089,10 @@ The delegated presenter submits the OIDC4VP response with the credential-derived
 
 ```http
 POST /x401/complete/proof-agent-001 HTTP/1.1
-Host: api.example.com
+Host: research.example.com
 Content-Type: application/x-www-form-urlencoded
 
-state=proof-agent-001&vp_token=<url-encoded-vp-token-containing-membership-and-delegation_authorization>
+state=proof-agent-001&vp_token=<url-encoded-vp-token-containing-board-certification-and-delegation_authorization>
 ```
 
 ### Completion Response
@@ -1082,9 +1111,9 @@ Cache-Control: no-store
   "verification_token": "eyJhbGciOi...",
   "expires_in": 300,
   "challenge_id": "proof-agent-001",
-  "request_id": "proof-template-active-member-v1",
+  "request_id": "proof-template-board-certified-doctor-v1",
   "satisfied_requirements": [
-    "urn:example:x401:satisfaction:active-member:v1"
+    "urn:example:x401:satisfaction:board-certified-doctor:v1"
   ]
 }
 ```
@@ -1092,8 +1121,8 @@ Cache-Control: no-store
 ### Retry
 
 ```http
-GET /reports/quarterly HTTP/1.1
-Host: api.example.com
+GET /papers/medical-study-123 HTTP/1.1
+Host: research.example.com
 Authorization: Bearer eyJhbGciOi...
 ```
 
@@ -1202,8 +1231,8 @@ A conforming x401 client:
   "proof": {
     "request_format": "openid4vp",
     "mode": "by_reference",
-    "client_id": "x509_san_dns:api.example.com",
-    "request_uri": "https://api.example.com/x401/requests/c-123"
+    "client_id": "x509_san_dns:research.example.com",
+    "request_uri": "https://research.example.com/x401/requests/c-123"
   }
 }
 ```
