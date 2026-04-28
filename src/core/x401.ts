@@ -1,10 +1,10 @@
 export function buildx401AuthenticateHeader(options: {
   challengeId: string;
   requestRef: string;
-  receiptType?: string;
+  retryArtifact?: string;
 }) {
-  const receiptType = options.receiptType ?? "bearer-token";
-  return `x401 challenge_id="${options.challengeId}", request_ref="${options.requestRef}", receipt_type="${receiptType}"`;
+  const retryArtifact = options.retryArtifact ?? "verification_token";
+  return `x401 challenge_id="${options.challengeId}", request_ref="${options.requestRef}", retry_artifact="${retryArtifact}"`;
 }
 
 export function buildMedicalStudyEnvelope(options: {
@@ -15,7 +15,6 @@ export function buildMedicalStudyEnvelope(options: {
   issuerDid: string;
   credentialIssuer: string;
   credentialOfferUri: string;
-  localWalletUri: string;
 }) {
   return {
     scheme: "x401",
@@ -34,7 +33,7 @@ export function buildMedicalStudyEnvelope(options: {
       client_id: options.clientId,
       request_uri: options.requestUri,
       request_uri_method: "get",
-      retry_artifact: "verifier_receipt",
+      retry_artifact: "verification_token",
     },
     acquisition: {
       credentials: [
@@ -56,15 +55,6 @@ export function buildMedicalStudyEnvelope(options: {
               },
             },
           ],
-        },
-      ],
-    },
-    invoke: {
-      preferred_order: ["local-agent-wallet", "direct-post"],
-      wallet_links: [
-        {
-          rel: "present",
-          href: options.localWalletUri,
         },
       ],
     },

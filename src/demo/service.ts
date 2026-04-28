@@ -316,7 +316,6 @@ export class DemoService {
     const challengeId = `c-${randomUUID()}`;
     const requestUri = `${this.baseUrl}/verifier/oidc/requests/${challengeId}`;
     const responseUri = `${this.baseUrl}/verifier/oidc/direct-post/${challengeId}`;
-    const localWalletUri = `${this.baseUrl}/local-agent/wallet/presentations/${challengeId}`;
     const nonce = `nonce-${randomUUID()}`;
     const state = `state-${randomUUID()}`;
     const authorizationRequestPayload = {
@@ -382,7 +381,6 @@ export class DemoService {
       issuerDid: this.actors.issuer.did,
       credentialIssuer: this.dataset.credentialIssuer,
       credentialOfferUri: this.dataset.credentialOfferUri,
-      localWalletUri,
     });
 
     const challenge: ChallengeRecord = {
