@@ -21,7 +21,6 @@ export function buildMedicalStudyEnvelope(options: {
     challenge_id: options.challengeId,
     proof: {
       request_format: "openid4vp",
-      mode: "by_reference",
       client_id: options.clientId,
       request_uri: options.requestUri,
       request_uri_method: "get",
