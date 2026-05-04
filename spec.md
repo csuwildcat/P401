@@ -24,6 +24,7 @@ x401 uses:
 - **HTTP 401 Unauthorized** to signal that proof is required
 - **OpenID for Verifiable Presentations (OIDC4VP)** as the proof request and presentation mechanism
 - **OpenID for Verifiable Credential Issuance (OIDC4VCI)** for optional, non-authoritative issuance hints that help presenters discover where qualifying credentials may be obtained
+- **OAuth 2.0 Token Exchange** and **OAuth 2.0 Device Authorization** as optional, standards-based ways to convert accepted proof into a reusable verification token
 
 x401 is intentionally separate from payment protocols. When payment is required, it MUST be handled with **HTTP 402 Payment Required** and an appropriate payment protocol. x401 MUST NOT redefine payment semantics.
 
@@ -56,10 +57,10 @@ x401 fills that gap by defining an HTTP-native wrapper that:
 - carries the x401 payload as a base64url value in the `WWW-Authenticate` response header
 - carries or references an OIDC4VP proof request
 - optionally includes OIDC4VCI-based issuance hints
-- supports interactive and agentic presenters
+- supports agent-brokered and wallet-mediated completion flows
 - composes with, but does not subsume, payment protocols
 
-In the typical flow, a [[ref: Presenter]] receives a challenge from a [[ref: Verifier]] and uses access to a [[ref: Wallet]], keys, or credentials to satisfy the embedded or referenced [[ref: Proof Request]]. Any [[ref: Issuance Hint]] data is advisory only.
+In the typical flow, a [[ref: Presenter]] receives a challenge from a [[ref: Verifier]] and uses access to a [[ref: Wallet]], keys, credentials, or wallet-mediated authorization flow to satisfy the embedded or referenced [[ref: Proof Request]]. Any [[ref: Issuance Hint]] data is advisory only.
 
 ## Design Goals
 
@@ -71,7 +72,8 @@ The goals of x401 are:
 4. Remain separate from payment semantics.
 5. Allow issuance discovery hints without making them authoritative verification rules.
 6. Allow proof requirements to be returned by reference.
-7. Support stateless verifier deployments by allowing challenge and continuation context to be encoded in verifier-protected artifacts.
+7. Support both agent-brokered proof submission and no-callback wallet-mediated proof completion.
+8. Support stateless verifier deployments by allowing challenge and continuation context to be encoded in verifier-protected artifacts.
 
 ## Non-Goals
 
@@ -121,6 +123,15 @@ The key words **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHALL NOT**, **
 [[def: Verification Token]]:
 ~ A verifier-issued, short-lived retry token returned after successful proof verification and used by the [[ref: Presenter]] on later protected-route requests so that the OIDC4VP presentation does not need to be repeated.
 
+[[def: Completion Mode]]:
+~ A verifier-advertised method by which a [[ref: Presenter]] can complete a x401 challenge and obtain a retry artifact.
+
+[[def: Agent-Brokered Completion]]:
+~ A [[ref: Completion Mode]] in which the [[ref: Presenter]] creates or obtains the OIDC4VP response from a local wallet, wallet API, credential subsystem, or delegated authority, and the [[ref: Presenter]] submits the proof or token request itself.
+
+[[def: Wallet-Mediated Device Completion]]:
+~ A [[ref: Completion Mode]] in which a wallet, browser, cloud wallet, or holder device completes the OIDC4VP presentation directly with the [[ref: Verifier]], while the [[ref: Presenter]] uses the OAuth 2.0 Device Authorization Grant to poll for the resulting [[ref: Verification Token]] without exposing an inbound callback URI.
+
 [[def: x401 Payload]]:
 ~ The JSON object defined by this specification, UTF-8 encoded, and carried as a base64url value in the `payload` parameter of the `WWW-Authenticate: x401` response header.
 
@@ -128,16 +139,17 @@ The key words **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHALL NOT**, **
 
 ### Proof-Only Flow
 
-In the base x401 flow, the [[ref: Presenter]] is the HTTP caller and is assumed to have access to a [[ref: Wallet]], keys, credentials, or local agent capabilities needed to fulfill the proof request. The [[ref: Presenter]] sends all requests to, and receives all responses from, the [[ref: Verifier]] in this flow, including OIDC4VP completion responses and any retry artifact.
+In the base x401 flow, the [[ref: Presenter]] is the HTTP caller. The [[ref: Presenter]] either uses [[ref: Agent-Brokered Completion]] to create or obtain the OIDC4VP response and submit it itself, or uses [[ref: Wallet-Mediated Device Completion]] when an external wallet completes the presentation directly with the [[ref: Verifier]].
 
 1. The [[ref: Presenter]] requests a protected route.
 2. The [[ref: Verifier]] determines that proof is required.
 3. The [[ref: Verifier]] returns `401 Unauthorized` with:
    - `WWW-Authenticate: x401 payload="<base64url-x401-payload>"`
-4. The [[ref: Presenter]] fulfills the proof requirement using the embedded or referenced OIDC4VP [[ref: Proof Request]].
-5. If the verifier accepts the presentation through the OIDC4VP completion endpoint, it MAY issue a [[ref: Verification Token]] to the [[ref: Presenter]].
-6. The [[ref: Presenter]] retries the protected route with either a [[ref: VP Artifact]] or a verifier-issued [[ref: Verification Token]] in the HTTP `Authorization` request header.
-7. The [[ref: Verifier]] validates the proof or token and returns the protected resource if successful.
+4. The [[ref: Presenter]] processes the embedded or referenced OIDC4VP [[ref: Proof Request]] and chooses a verifier-supported [[ref: Completion Mode]].
+5. In [[ref: Agent-Brokered Completion]], the [[ref: Presenter]] creates or obtains the OIDC4VP response and submits the proof or token request itself.
+6. In [[ref: Wallet-Mediated Device Completion]], the [[ref: Presenter]] starts an OAuth 2.0 Device Authorization transaction, hands the wallet-facing verification URI or code to the wallet or user, and polls the token endpoint until the wallet-mediated OIDC4VP presentation is accepted.
+7. The [[ref: Presenter]] retries the protected route with either a [[ref: VP Artifact]] or a verifier-issued [[ref: Verification Token]] in the HTTP `Authorization` request header.
+8. The [[ref: Verifier]] validates the proof or token and returns the protected resource if successful.
 
 ```mermaid
 sequenceDiagram
@@ -145,9 +157,9 @@ sequenceDiagram
     participant Verifier
     Presenter->>Verifier: Request protected route
     Verifier-->>Presenter: 401 + WWW-Authenticate: x401 payload="..."
-    Presenter->>Presenter: Fulfill OIDC4VP request using wallet, keys, or credentials
-    Presenter->>Verifier: Presentation response to response_uri
-    Verifier-->>Presenter: Optional verification token
+    Presenter->>Presenter: Select supported completion mode
+    Presenter->>Verifier: Submit proof or poll for accepted wallet proof
+    Verifier-->>Presenter: Optional verification token or accepted proof result
     Presenter->>Verifier: Retry with VP artifact or token
     Verifier-->>Presenter: Protected resource
 ```
@@ -166,10 +178,10 @@ The protocol boundary is:
    - `direct_post` and `response_uri`: OpenID4VP Section 8.2.
    - Verifier validation of `client_id` and `nonce` binding: OpenID4VP Section 8.6 and Section 14.1.2.
 4. Delegation evidence, when required, is declared by x401 metadata around the OIDC4VP request and submitted with the OIDC4VP response in the same completion transaction. x401 does not change the OIDC4VP `vp_token` structure.
-5. x401 resumes when the verifier has accepted the OIDC4VP result and the [[ref: Presenter]] retries the original protected route with either a [[ref: VP Artifact]] or a [[ref: Verification Token]].
+5. x401 resumes when the verifier has accepted the OIDC4VP result and the [[ref: Presenter]] retries the original protected route with either a [[ref: VP Artifact]] or a [[ref: Verification Token]] obtained through a verifier-supported [[ref: Completion Mode]].
 6. `acquisition` never changes verification behavior. When it points to issuance, it points only to an HTTPS origin that can be resolved using OIDC4VCI issuer metadata rules, or to a DID that can be dereferenced to discover linked HTTPS origins.
 
-If a deployment uses a wallet, browser, device, or application that is separate from the [[ref: Presenter]], that deployment MUST define an explicit continuation mechanism that returns the accepted proof result or retry artifact to the [[ref: Presenter]]. Such mechanisms can include an OIDC4VP `redirect_uri`, a response code, a polling handle, an OIDC4VP `response_uri` completion endpoint, or another verifier-defined handoff.
+If a deployment uses a wallet, browser, device, or application that is separate from the [[ref: Presenter]], that deployment MUST define an explicit continuation mechanism that returns the accepted proof result or retry artifact to the [[ref: Presenter]]. The standards-aligned continuation mechanism defined by this specification is [[ref: Wallet-Mediated Device Completion]], which uses the OAuth 2.0 Device Authorization Grant so the [[ref: Presenter]] only needs outbound polling. Other mechanisms can include an OIDC4VP `redirect_uri`, a response code, a session-bound completion endpoint, or another verifier-defined handoff.
 
 ### Challenge Correlation
 
@@ -194,6 +206,8 @@ The `vp_token` alone is not assumed to carry all x401 continuation context. For 
 The OIDC4VP `state` parameter is not a x401 server-side state requirement. In a stateless x401 deployment, it is a standard OIDC4VP response parameter that can carry or reference verifier-protected continuation context. x401 does not define a separate `state` field.
 
 Stateless processing does not remove every need for storage. Verifiers MAY still keep server-side state for replay detection, token revocation, audit, rate limiting, or one-time challenge enforcement. If a deployment requires strict one-time-use challenges, it generally needs replay state or another shared replay-prevention mechanism.
+
+Wallet-mediated device authorization generally requires the verifier or authorization server to maintain, or be able to reconstruct from protected handles, the transaction that binds `device_code`, `user_code`, OIDC4VP `state`, OIDC4VP `nonce`, protected route context, expiration, and token issuance status. The OAuth 2.0 Device Authorization correlation between the presenter-held `device_code` and wallet-facing `user_code` is standard; the requirement that successful OIDC4VP presentation completes that transaction is the x401 profile behavior.
 
 ### Proof-Plus-Payment Flow
 
@@ -332,6 +346,16 @@ The proof object references the OIDC4VP request.
   "satisfied_requirements": [
     "urn:example:x401:satisfaction:board-certified-doctor:v1"
   ],
+  "completion": {
+    "modes": [
+      "vp_retry",
+      "direct_post_token",
+      "token_exchange",
+      "device_authorization"
+    ],
+    "token_endpoint": "https://research.example.com/oauth/token",
+    "device_authorization_endpoint": "https://research.example.com/oauth/device_authorization/c-123"
+  },
   "delegation": {
     "mode": "accepted",
     "mechanism": "signed_authorization",
@@ -352,8 +376,26 @@ Name | Definition
 `request_uri_method` | OPTIONAL. Contains the OIDC4VP `request_uri_method` parameter when the verifier expects POST-based Request URI retrieval. If omitted, Wallets use the default `request_uri` processing defined by RFC 9101 and OpenID4VP.
 `request_id` | OPTIONAL. A stable verifier-defined identifier for the proof request template. This value can be reused across challenge instances and routes when they ask for the same proof requirement.
 `satisfied_requirements` | OPTIONAL. An array of stable verifier-defined identifiers for the reusable proof requirements that will be marked satisfied if this proof request is fulfilled. These identifiers help presenters and verifiers determine whether a [[ref: Verification Token]] from an earlier x401 challenge can satisfy a later challenge.
+`completion` | OPTIONAL. Describes verifier-supported [[ref: Completion Mode]] values and OAuth endpoints the presenter can use to complete the challenge and obtain retry artifacts.
 `delegation` | OPTIONAL. Describes whether delegated presentation is disallowed or accepted and how [[ref: Delegation Evidence]] is submitted with the OIDC4VP response. If omitted, presenters MUST treat delegated presentation as disallowed unless they have verifier-specific configuration indicating otherwise.
 `retry_artifacts` | OPTIONAL. Array describing the artifacts the presenter may submit when retrying the original protected route. Values defined by this specification are `vp` and `verification_token`. If omitted, presenters MAY try either `vp` or `verification_token`.
+
+### Completion Members
+
+Name | Definition
+---- | ----------
+`modes` | REQUIRED when `completion` is present. Array of supported completion mode identifiers. Values defined by this specification are `vp_retry`, `direct_post_token`, `token_exchange`, and `device_authorization`.
+`token_endpoint` | REQUIRED when `modes` includes `token_exchange` or `device_authorization`. The OAuth 2.0 token endpoint used for RFC 8693 Token Exchange or RFC 8628 Device Authorization polling.
+`device_authorization_endpoint` | REQUIRED when `modes` includes `device_authorization`. The OAuth 2.0 Device Authorization endpoint where the presenter obtains a `device_code`, `user_code`, and wallet-facing verification URI. The endpoint SHOULD be specific to the x401 challenge instance or otherwise allow the verifier to bind a standard Device Authorization request to the x401 challenge without requiring an inbound presenter callback.
+
+Completion mode values:
+
+Value | Meaning
+---- | -------
+`vp_retry` | The presenter sends a [[ref: VP Artifact]] directly to the protected route using the `Authorization: x401` request header.
+`direct_post_token` | The presenter submits the OIDC4VP Authorization Response to the OIDC4VP response endpoint, such as the `response_uri` used with `direct_post`, and receives a [[ref: Verification Token]] in that HTTP response.
+`token_exchange` | The presenter has the OIDC4VP response or `vp_token` and exchanges it at `token_endpoint` using OAuth 2.0 Token Exchange.
+`device_authorization` | The presenter uses OAuth 2.0 Device Authorization to obtain a polling handle, hands the wallet-facing verification URI or code to an external wallet or user, and polls `token_endpoint` until the wallet-mediated presentation is accepted.
 
 ### Delegation Members
 
@@ -380,6 +422,7 @@ x401 implementations that use OIDC4VP:
 10. The Request Object's `aud` claim MUST follow OpenID4VP Section 5.8.
 11. SHOULD prefer a verifier-issued [[ref: Verification Token]] for subsequent route retry when doing multi-step, browser-centric, or delegated-presenter flows.
 12. MAY allow direct protected-route retry with a [[ref: VP Artifact]] for callers that do not want to obtain or manage a verifier-issued token.
+13. MUST NOT assume that a [[ref: Presenter]] receives the HTTP response from an OIDC4VP submission made by a separate wallet. If the wallet submits the OIDC4VP response directly to the verifier, the deployment MUST use an explicit continuation mechanism such as [[ref: Wallet-Mediated Device Completion]].
 
 ### Proof Object Example
 
@@ -394,6 +437,11 @@ x401 implementations that use OIDC4VP:
   "satisfied_requirements": [
     "urn:example:x401:satisfaction:board-certified-doctor:v1"
   ],
+  "completion": {
+    "modes": ["vp_retry", "token_exchange", "device_authorization"],
+    "token_endpoint": "https://research.example.com/oauth/token",
+    "device_authorization_endpoint": "https://research.example.com/oauth/device_authorization/c-123"
+  },
   "retry_artifacts": ["vp", "verification_token"]
 }
 ```
@@ -574,11 +622,14 @@ A presenter receiving a `401 Unauthorized` response with a `WWW-Authenticate: x4
 7. MAY invoke a wallet or agent subsystem to fulfill the OIDC4VP request.
 8. If an acquisition issuer hint is an HTTPS origin, SHOULD resolve OIDC4VCI issuer metadata from that origin.
 9. If acting as a [[ref: Delegated Presenter]], MUST submit the requested [[ref: Delegation Evidence]] with the OIDC4VP response in the same verifier transaction.
-10. MAY retry the original route with:
+10. MUST choose a verifier-supported [[ref: Completion Mode]] when `proof.completion` is present.
+11. MAY retry the original route with:
    - a [[ref: VP Artifact]], if the presenter wants the protected route to process the presentation directly, or
    - a verifier-issued [[ref: Verification Token]], if the presenter completed the OIDC4VP response endpoint flow
-11. If `proof.retry_artifacts` is present, MUST choose an artifact type listed there.
-12. MUST send a [[ref: VP Artifact]] or [[ref: Verification Token]] in the `Authorization` request header when retrying the protected route.
+12. MAY use OAuth 2.0 Token Exchange when `proof.completion.modes` includes `token_exchange` and the presenter has the OIDC4VP response or `vp_token`.
+13. MAY use OAuth 2.0 Device Authorization when `proof.completion.modes` includes `device_authorization` and an external wallet, browser, device, or cloud wallet will complete the OIDC4VP presentation directly with the verifier.
+14. If `proof.retry_artifacts` is present, MUST choose an artifact type listed there.
+15. MUST send a [[ref: VP Artifact]] or [[ref: Verification Token]] in the `Authorization` request header when retrying the protected route.
 
 ## Verifier Processing Rules
 
@@ -596,8 +647,11 @@ A verifier implementing x401:
 10. MUST validate [[ref: Delegation Evidence]] as part of the same verifier decision when a presenter is acting on behalf of another party.
 11. If issuing a [[ref: Verification Token]], MUST issue it to the [[ref: Presenter]], not merely to the credential subject, and MUST scope it to the verifier, route, policy, validity window, and satisfied proof requirements for which proof was accepted.
 12. MUST accept a [[ref: VP Artifact]] in the `Authorization` request header for protected-route retry unless `proof.retry_artifacts` is present and omits `vp`.
-13. SHOULD return `403 Forbidden` if proof is presented but policy satisfaction fails.
-14. MUST use `402 Payment Required` separately if payment is required and remains unsatisfied.
+13. If advertising `token_exchange`, MUST validate the OIDC4VP proof before issuing a token from the OAuth 2.0 token endpoint.
+14. If advertising `device_authorization`, MUST bind the OAuth 2.0 Device Authorization transaction to the x401 challenge, OIDC4VP request, `nonce`, `state` when used, protected route context, expiration, and expected retry artifact.
+15. If advertising `device_authorization`, MUST return standard OAuth 2.0 Device Authorization polling errors such as `authorization_pending`, `slow_down`, `access_denied`, and `expired_token` according to RFC 8628.
+16. SHOULD return `403 Forbidden` if proof is presented but policy satisfaction fails.
+17. MUST use `402 Payment Required` separately if payment is required and remains unsatisfied.
 
 ## Authorization Request Header
 
@@ -621,18 +675,21 @@ The `vp` value is the base64url-encoded UTF-8 JSON serialization of the OIDC4VP 
 
 A protected route that advertises `vp` in `proof.retry_artifacts` MUST process the supplied value as a proof submission attempt. If verification succeeds, the verifier MAY return the protected resource directly or MAY return a [[ref: Verification Token]] for subsequent retries.
 
-## Retry Models
+## Completion and Retry Models
 
-x401 supports two broad retry models.
+x401 supports three completion and retry models. Each model starts from the same `401 Unauthorized` challenge and the same OIDC4VP [[ref: Proof Request]].
 
-Model | Retry artifact | Best fit
------ | -------------- | --------
-VP retry | A [[ref: VP Artifact]] is sent back to the protected route | Direct API-to-API flows and callers that do not want to manage a token
-Verification token retry | A verifier-issued [[ref: Verification Token]] is sent on retry | Browser-centric, delegated, and multi-step flows
+Model | Completion mode | Best fit
+----- | --------------- | --------
+Direct VP retry | `vp_retry` | API-to-API flows and callers that do not want to manage a token
+Agent-held proof tokenization | `direct_post_token` or `token_exchange` | Agents, workloads, local wallets, API wallets, and delegated presenters that can obtain the OIDC4VP response
+Wallet-mediated device authorization | `device_authorization` | External wallets, cloud wallets, mobile wallets, browsers, and headless agents with no inbound callback endpoint
+
+For new deployments that want OAuth-compatible token issuance, `token_exchange` and `device_authorization` are RECOMMENDED over returning tokens directly from an OIDC4VP `response_uri`. The `direct_post_token` mode exists for deployments that intentionally use the OIDC4VP response endpoint itself as the completion endpoint.
 
 ### Model A: VP Retry
 
-The presenter fulfills the OIDC4VP request and retries the original route with a [[ref: VP Artifact]] in the `Authorization` request header. This model lets the protected resource process the presentation without requiring the presenter to obtain or manage a verifier-issued token.
+The presenter fulfills the OIDC4VP request through [[ref: Agent-Brokered Completion]] and retries the original route with a [[ref: VP Artifact]] in the `Authorization` request header. This model lets the protected resource process the presentation without requiring the presenter to obtain or manage a verifier-issued token.
 
 A [[ref: VP Artifact]] is the base64url-encoded UTF-8 JSON serialization of the OIDC4VP response parameters needed by the verifier, using the same no-padding encoding as the x401 payload. The object MUST preserve standard OIDC4VP member names. When the OIDC4VP response includes `state` or `presentation_submission`, those members MUST be included with `vp_token` inside the decoded `vp` artifact.
 
@@ -646,11 +703,40 @@ Authorization: x401 vp="<base64url-oidc4vp-response-json>"
 
 `vp_token` is an OIDC4VP response member inside the decoded `vp` artifact. It is not a separate x401 retry artifact.
 
-### Model B: Verification Token Retry
+### Model B: Agent-Held Proof Tokenization
 
-The presenter fulfills the OIDC4VP request through the OIDC4VP response endpoint identified by the Request Object. For `response_mode=direct_post`, this is the OIDC4VP `response_uri`.
+The presenter fulfills the OIDC4VP request through [[ref: Agent-Brokered Completion]]. The presenter has the OIDC4VP response because it is wallet-capable, controls the required key and credential material, or invoked a wallet or holder subsystem that returned the complete OIDC4VP response payload to the presenter.
 
-After that endpoint verifies the OIDC4VP response, it MAY return a [[ref: Verification Token]]. The presenter uses that token when retrying the original route.
+The presenter can obtain a [[ref: Verification Token]] in either of two ways:
+
+1. Submit the OIDC4VP response to the OIDC4VP response endpoint identified by the Request Object. For `response_mode=direct_post`, this is the OIDC4VP `response_uri`. If the verifier accepts the response, it MAY return a [[ref: Verification Token]] directly to the presenter.
+2. Exchange the OIDC4VP response, `vp_token`, or a verifier-accepted representation of the proof at the OAuth 2.0 token endpoint using OAuth 2.0 Token Exchange.
+
+Example Token Exchange request:
+
+```http
+POST /oauth/token HTTP/1.1
+Host: research.example.com
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=urn:ietf:params:oauth:grant-type:token-exchange
+&subject_token=<vp-token-or-vp-artifact>
+&subject_token_type=urn:ietf:params:oauth:token-type:vp_token
+&audience=https%3A%2F%2Fresearch.example.com
+```
+
+The `subject_token_type` value above is the x401-defined token type for an OIDC4VP presentation token or VP artifact. If a deployment uses an already-registered OAuth token type URI for a specific VP serialization, it MAY use that token type instead.
+
+If accepted, the token endpoint returns a standard OAuth 2.0 token response:
+
+```json
+{
+  "access_token": "eyJhbGciOi...",
+  "issued_token_type": "urn:ietf:params:oauth:token-type:access_token",
+  "token_type": "Bearer",
+  "expires_in": 300
+}
+```
 
 Retry example:
 
@@ -660,7 +746,75 @@ Host: research.example.com
 Authorization: Bearer eyJhbGciOi...
 ```
 
-Model B is RECOMMENDED for browser-centric, delegated, and multi-step flows.
+Model B is RECOMMENDED when the presenter can obtain the OIDC4VP response and the protected route should use standard Bearer token processing.
+
+### Model C: Wallet-Mediated Device Authorization
+
+The presenter uses [[ref: Wallet-Mediated Device Completion]] when a separate wallet, browser, holder device, or cloud wallet completes the OIDC4VP presentation directly with the verifier and the presenter cannot receive inbound callbacks.
+
+In this model, the presenter first obtains a polling handle through the OAuth 2.0 Device Authorization Grant. The verifier binds that device authorization transaction to the x401 challenge and the OIDC4VP request. The presenter gives the wallet-facing `verification_uri`, `verification_uri_complete`, or `user_code` to the user or wallet. The wallet completes the OIDC4VP flow directly with the verifier. The presenter polls the token endpoint with the `device_code` until the verifier has accepted the wallet-submitted presentation.
+
+The OAuth `client_id` used by the presenter at the device authorization and token endpoints identifies the presenter as an OAuth client for token issuance. It is distinct from the OIDC4VP `client_id`, which identifies the verifier in the presentation request.
+
+The `device_authorization_endpoint` advertised in the x401 payload SHOULD be challenge-bound, for example by including the challenge identifier in the endpoint URI. This lets the presenter use the standard RFC 8628 request parameters while allowing the verifier to bind the resulting `device_code` and `user_code` to the correct x401 challenge.
+
+Device Authorization request:
+
+```http
+POST /oauth/device_authorization/proof-001 HTTP/1.1
+Host: research.example.com
+Content-Type: application/x-www-form-urlencoded
+
+client_id=agent-client-123
+&scope=x401
+```
+
+Device Authorization response:
+
+```json
+{
+  "device_code": "GmRhmhcxhwAzkoEqiMEg_DnyEysNkuNhszIySk9eS",
+  "user_code": "WDJB-MJHT",
+  "verification_uri": "https://research.example.com/x401/device",
+  "verification_uri_complete": "https://research.example.com/x401/device?user_code=WDJB-MJHT",
+  "expires_in": 300,
+  "interval": 5
+}
+```
+
+The presenter retains `device_code` and sends the wallet-facing URI or code to the user or wallet. The verifier-hosted verification URI activates the same transaction and causes the wallet to receive or launch the OIDC4VP request associated with the x401 challenge.
+
+While the wallet has not completed proof verification, the presenter polls the token endpoint:
+
+```http
+POST /oauth/token HTTP/1.1
+Host: research.example.com
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=urn:ietf:params:oauth:grant-type:device_code
+&device_code=GmRhmhcxhwAzkoEqiMEg_DnyEysNkuNhszIySk9eS
+&client_id=agent-client-123
+```
+
+Pending response:
+
+```json
+{
+  "error": "authorization_pending"
+}
+```
+
+After the wallet completes the OIDC4VP presentation and the verifier accepts it, the token endpoint returns a standard OAuth 2.0 token response:
+
+```json
+{
+  "access_token": "eyJhbGciOi...",
+  "token_type": "Bearer",
+  "expires_in": 300
+}
+```
+
+The wallet is not required to return the `vp_token` or OIDC4VP response payload to the presenter in Model C. The verifier correlates the presenter-held `device_code` and wallet-facing `user_code` or verification URI as part of the same OAuth 2.0 Device Authorization transaction.
 
 ## Verification Tokens
 
@@ -676,9 +830,17 @@ A verifier MAY issue a [[ref: Verification Token]] after accepting an OIDC4VP re
 4. MUST expire, and SHOULD be short-lived.
 5. SHOULD include a unique token identifier or otherwise support replay detection and revocation.
 
+The verifier MAY return or issue a [[ref: Verification Token]] through:
+
+1. the OIDC4VP response endpoint, such as the `response_uri` used with `direct_post`;
+2. an OAuth 2.0 token endpoint using OAuth 2.0 Token Exchange when the presenter has the OIDC4VP response or `vp_token`; or
+3. an OAuth 2.0 token endpoint using the OAuth 2.0 Device Authorization Grant when a separate wallet completed the OIDC4VP presentation directly with the verifier.
+
+In all cases, the token issuance decision MUST be based on verifier acceptance of the OIDC4VP response and any required x401 delegation evidence. The token endpoint MUST NOT issue a [[ref: Verification Token]] merely because a device authorization transaction exists or a token exchange request is structurally valid.
+
 The response that carries a [[ref: Verification Token]] is intentionally compatible with an OAuth 2.0 successful access token response. The `access_token` value is the [[ref: Verification Token]], and the `token_type` value tells the presenter how to use that token on the protected-route retry. A deployment MAY issue and validate this token through existing OAuth infrastructure, but x401 does not define a new OAuth grant type or require every x401 verifier to operate as an OAuth authorization server.
 
-The endpoint that produces a [[ref: Verification Token]] is the OIDC4VP response endpoint named by the Request Object. For `direct_post`, the presenter or wallet sends the OIDC4VP response to the `response_uri` using the standard OpenID4VP response encoding:
+When the endpoint that produces a [[ref: Verification Token]] is the OIDC4VP response endpoint named by the Request Object, the presenter receives the token only if the presenter is the party making that HTTP request. For `direct_post`, the submitting party sends the OIDC4VP response to the `response_uri` using the standard OpenID4VP response encoding:
 
 ```http
 POST /x401/complete/proof-001 HTTP/1.1
@@ -687,6 +849,8 @@ Content-Type: application/x-www-form-urlencoded
 
 state=<state>&vp_token=<vp-token>&presentation_submission=<presentation-submission>
 ```
+
+If a separate wallet submits that request and the presenter needs the resulting token, the verifier MUST provide a continuation mechanism such as [[ref: Wallet-Mediated Device Completion]]. A presenter MUST NOT assume it can observe or intercept the response to a wallet-to-verifier request.
 
 When the verifier accepts that OIDC4VP response and elects to issue a [[ref: Verification Token]], the response body SHOULD use this OAuth-compatible JSON shape:
 
@@ -768,6 +932,11 @@ Decoded x401 payload, shown for readability:
     "satisfied_requirements": [
       "urn:example:x401:satisfaction:board-certified-doctor:v1"
     ],
+    "completion": {
+      "modes": ["vp_retry", "direct_post_token", "token_exchange", "device_authorization"],
+      "token_endpoint": "https://research.example.com/oauth/token",
+      "device_authorization_endpoint": "https://research.example.com/oauth/device_authorization/proof-001"
+    },
     "retry_artifacts": ["vp", "verification_token"]
   },
   "acquisition": {
@@ -862,6 +1031,11 @@ Decoded x401 payload, shown for readability:
     "satisfied_requirements": [
       "urn:example:x401:satisfaction:board-certified-doctor:v1"
     ],
+    "completion": {
+      "modes": ["direct_post_token", "device_authorization"],
+      "token_endpoint": "https://research.example.com/oauth/token",
+      "device_authorization_endpoint": "https://research.example.com/oauth/device_authorization/proofpay-001"
+    },
     "retry_artifacts": ["vp", "verification_token"]
   },
   "acquisition": {
@@ -925,6 +1099,11 @@ In this example, `did:web:agent.example` is presenting on behalf of a user. The 
   "satisfied_requirements": [
     "urn:example:x401:satisfaction:board-certified-doctor:v1"
   ],
+  "completion": {
+    "modes": ["direct_post_token", "token_exchange", "device_authorization"],
+    "token_endpoint": "https://research.example.com/oauth/token",
+    "device_authorization_endpoint": "https://research.example.com/oauth/device_authorization/proof-agent-001"
+  },
   "delegation": {
     "mode": "accepted",
     "mechanism": "signed_authorization",
@@ -1006,6 +1185,74 @@ Host: research.example.com
 Authorization: Bearer eyJhbGciOi...
 ```
 
+## Example 4: Wallet-Mediated Device Completion
+
+In this example, the agent is running in a headless environment with no inbound callback URI. The user has a mobile wallet that completes the OIDC4VP presentation directly with the verifier. The agent obtains the polling handle before handing off to the wallet.
+
+### Device Authorization Request
+
+```http
+POST /oauth/device_authorization/proof-001 HTTP/1.1
+Host: research.example.com
+Content-Type: application/x-www-form-urlencoded
+
+client_id=agent-client-123
+&scope=x401
+```
+
+### Device Authorization Response
+
+```json
+{
+  "device_code": "GmRhmhcxhwAzkoEqiMEg_DnyEysNkuNhszIySk9eS",
+  "user_code": "WDJB-MJHT",
+  "verification_uri": "https://research.example.com/x401/device",
+  "verification_uri_complete": "https://research.example.com/x401/device?user_code=WDJB-MJHT",
+  "expires_in": 300,
+  "interval": 5
+}
+```
+
+The agent sends `verification_uri_complete` or `user_code` to the user or wallet. The verifier resolves that value to the x401 challenge, displays or launches the OIDC4VP request, and receives the wallet-submitted OIDC4VP response at the verifier's `response_uri`.
+
+### Token Polling
+
+Before the wallet completes verification, the token endpoint returns the standard Device Authorization pending response:
+
+```http
+POST /oauth/token HTTP/1.1
+Host: research.example.com
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=urn:ietf:params:oauth:grant-type:device_code
+&device_code=GmRhmhcxhwAzkoEqiMEg_DnyEysNkuNhszIySk9eS
+&client_id=agent-client-123
+```
+
+```json
+{
+  "error": "authorization_pending"
+}
+```
+
+After the wallet presentation is accepted, the same polling request returns a verification token:
+
+```json
+{
+  "access_token": "eyJhbGciOi...",
+  "token_type": "Bearer",
+  "expires_in": 300
+}
+```
+
+### Retry
+
+```http
+GET /papers/medical-study-123 HTTP/1.1
+Host: research.example.com
+Authorization: Bearer eyJhbGciOi...
+```
+
 ## Security Considerations
 
 ### Replay Prevention
@@ -1040,6 +1287,12 @@ The [[ref: Delegation Authorization]] is not a bearer secret. A verifier MUST re
 
 Verification tokens SHOULD be short-lived, revocable, and scoped to the accepted x401 challenge. A verifier that issues a token to a delegated presenter MUST identify the delegated presenter as the token holder and MUST NOT treat the credential subject as the token holder.
 
+### Device Authorization Polling
+
+Verifiers that support [[ref: Wallet-Mediated Device Completion]] MUST treat `device_code` values as bearer-like polling secrets and MUST follow RFC 8628 expiration, polling interval, and error handling requirements. The verifier MUST NOT issue a token from a device authorization transaction until the associated OIDC4VP presentation and any required delegation evidence have been accepted.
+
+Wallet-facing `user_code` values and verification URIs are correlation handles, not proof of authorization by themselves. Verifiers SHOULD make them single-use, short-lived, and resistant to guessing.
+
 ### Payment Separation
 
 Implementations MUST keep proof and payment semantics separate. A proof artifact MUST NOT be treated as payment, and payment satisfaction MUST NOT be treated as proof satisfaction.
@@ -1060,7 +1313,12 @@ Repeated use of the same credential or issuer across multiple routes may introdu
 
 ## IANA Considerations
 
-This draft does not yet request any IANA registrations.
+This draft defines the following OAuth Token Type URI for use with OAuth 2.0 Token Exchange when the exchanged subject token is an OIDC4VP `vp_token` or x401 [[ref: VP Artifact]]:
+
+- Token type URI: `urn:ietf:params:oauth:token-type:vp_token`
+- Description: OIDC4VP presentation token or x401 VP artifact
+
+The registration request is provisional until this specification is advanced through an appropriate standards process.
 
 ## Conformance
 
@@ -1070,9 +1328,12 @@ A conforming x401 verifier:
 - includes `WWW-Authenticate: x401 payload="..."`
 - returns a valid base64url-encoded x401 payload in the challenge header
 - uses OIDC4VP for the proof request
+- advertises supported completion modes when more than direct VP retry is supported
 - validates delegated presenter evidence when delegated presentation is accepted
 - accepts VP artifacts in the `Authorization` header unless `proof.retry_artifacts` restricts them
 - issues verification tokens to the presenter when token retry is used
+- supports OAuth 2.0 Token Exchange semantics when `token_exchange` is advertised
+- supports OAuth 2.0 Device Authorization polling semantics when `device_authorization` is advertised
 - optionally includes OIDC4VCI issuance hints
 - keeps payment separate under `402 Payment Required`
 
@@ -1081,8 +1342,10 @@ A conforming x401 presenter:
 - recognizes `WWW-Authenticate: x401`
 - decodes and processes the x401 payload from the `payload` challenge parameter
 - fulfills or escalates the OIDC4VP proof request
+- selects a verifier-supported completion mode
 - submits delegation evidence with the OIDC4VP response when acting as a delegated presenter
 - sends VP artifacts or verification tokens in the `Authorization` header when retrying protected routes
+- uses device authorization polling when a separate wallet completes proof directly with the verifier and no callback continuation is available
 - treats OIDC4VCI acquisition hints as optional and non-authoritative
 - supports separate handling of `402 Payment Required`
 
@@ -1098,6 +1361,8 @@ A conforming x401 presenter:
 - [RFC 6750: The OAuth 2.0 Authorization Framework: Bearer Token Usage](https://datatracker.ietf.org/doc/html/rfc6750)
 - [RFC 7519: JSON Web Token](https://datatracker.ietf.org/doc/html/rfc7519)
 - [RFC 8414: OAuth 2.0 Authorization Server Metadata](https://datatracker.ietf.org/doc/html/rfc8414)
+- [RFC 8628: OAuth 2.0 Device Authorization Grant](https://datatracker.ietf.org/doc/html/rfc8628)
+- [RFC 8693: OAuth 2.0 Token Exchange](https://datatracker.ietf.org/doc/html/rfc8693)
 - [RFC 9101: OAuth 2.0 JWT-Secured Authorization Request (JAR)](https://datatracker.ietf.org/doc/html/rfc9101)
 - [OpenID for Verifiable Presentations 1.0](https://openid.net/specs/openid-4-verifiable-presentations-1_0-final.html)
 - [OpenID for Verifiable Credential Issuance 1.0](https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0-final.html)
