@@ -27,7 +27,7 @@ x401 uses:
 
 x401 is intentionally separate from payment protocols. When payment is required, it MUST be handled with **HTTP 402 Payment Required** and an appropriate payment protocol. x401 MUST NOT redefine payment semantics.
 
-This document defines the x401 envelope, processing rules, interoperability requirements, and examples for proof-only and proof-plus-payment flows.
+This document defines the x401 payload, processing rules, interoperability requirements, and examples for proof-only and proof-plus-payment flows.
 
 ::: note Protocol Boundary
 x401 defines proof challenge semantics only. When payment is required, implementations still use `402 Payment Required` and a separate payment protocol.
@@ -53,6 +53,7 @@ At the same time, the OpenID4VP and OIDC4VCI specifications define interoperable
 x401 fills that gap by defining an HTTP-native wrapper that:
 
 - signals proof requirements at the protected route
+- carries the x401 payload as a base64url value in the `WWW-Authenticate` response header
 - carries or references an OIDC4VP proof request
 - optionally includes OIDC4VCI-based issuance hints
 - supports interactive and agentic presenters
@@ -70,6 +71,7 @@ The goals of x401 are:
 4. Remain separate from payment semantics.
 5. Allow issuance discovery hints without making them authoritative verification rules.
 6. Allow proof requirements to be returned by reference.
+7. Support stateless verifier deployments by allowing challenge and continuation context to be encoded in verifier-protected artifacts.
 
 ## Non-Goals
 
@@ -111,13 +113,16 @@ The key words **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHALL NOT**, **
 ~ An OpenID4VP Authorization Request, conveyed by reference, that describes the credentials, claims, predicates, or constraints that must be satisfied.
 
 [[def: Issuance Hint]]:
-~ A non-authoritative hint describing where the presenter may be able to obtain credentials through OIDC4VCI or a compatible issuance mechanism.
+~ A non-authoritative HTTPS origin or DID describing where the presenter may be able to discover OIDC4VCI issuer metadata for credentials that could satisfy the proof request.
+
+[[def: VP Artifact]]:
+~ A retry artifact containing the full OIDC4VP response needed to verify proof fulfillment, including the OIDC4VP `vp_token` and any required accompanying parameters such as `state` and `presentation_submission`, encoded for use in the HTTP `Authorization` request header.
 
 [[def: Verification Token]]:
 ~ A verifier-issued, short-lived retry token returned after successful proof verification and used by the [[ref: Presenter]] on later protected-route requests so that the OIDC4VP presentation does not need to be repeated.
 
-[[def: x401 Envelope]]:
-~ The JSON object defined by this specification and returned in the response body of a `401 Unauthorized` response.
+[[def: x401 Payload]]:
+~ The JSON object defined by this specification, UTF-8 encoded, and carried as a base64url value in the `payload` parameter of the `WWW-Authenticate: x401` response header.
 
 ## Protocol Overview
 
@@ -128,11 +133,10 @@ In the base x401 flow, the [[ref: Presenter]] is the HTTP caller and is assumed 
 1. The [[ref: Presenter]] requests a protected route.
 2. The [[ref: Verifier]] determines that proof is required.
 3. The [[ref: Verifier]] returns `401 Unauthorized` with:
-   - `WWW-Authenticate: x401 ...`
-   - a [[ref: x401 Envelope]] in the response body
+   - `WWW-Authenticate: x401 payload="<base64url-x401-payload>"`
 4. The [[ref: Presenter]] fulfills the proof requirement using the embedded or referenced OIDC4VP [[ref: Proof Request]].
-5. If the verifier accepts the presentation, it MAY issue a [[ref: Verification Token]] to the [[ref: Presenter]].
-6. The [[ref: Presenter]] retries the protected route with the resulting proof artifact or verifier-issued [[ref: Verification Token]].
+5. If the verifier accepts the presentation through the OIDC4VP completion endpoint, it MAY issue a [[ref: Verification Token]] to the [[ref: Presenter]].
+6. The [[ref: Presenter]] retries the protected route with either a [[ref: VP Artifact]] or a verifier-issued [[ref: Verification Token]] in the HTTP `Authorization` request header.
 7. The [[ref: Verifier]] validates the proof or token and returns the protected resource if successful.
 
 ```mermaid
@@ -140,21 +144,21 @@ sequenceDiagram
     participant Presenter
     participant Verifier
     Presenter->>Verifier: Request protected route
-    Verifier-->>Presenter: 401 + WWW-Authenticate: x401 + envelope
+    Verifier-->>Presenter: 401 + WWW-Authenticate: x401 payload="..."
     Presenter->>Presenter: Fulfill OIDC4VP request using wallet, keys, or credentials
-    Presenter->>Verifier: Presentation response
+    Presenter->>Verifier: Presentation response to response_uri
     Verifier-->>Presenter: Optional verification token
-    Presenter->>Verifier: Retry with proof artifact or token
+    Presenter->>Verifier: Retry with VP artifact or token
     Verifier-->>Presenter: Protected resource
 ```
 
 ## OIDC Boundary and Reuse
 
-x401 stays intentionally narrow. It defines the HTTP challenge at the protected route and the envelope that carries proof and acquisition data. It does not redefine the OIDC objects carried inside that envelope.
+x401 stays intentionally narrow. It defines the HTTP challenge at the protected route and the payload that carries proof and acquisition data. It does not redefine the OIDC objects carried inside that payload.
 
 The protocol boundary is:
 
-1. x401 governs the protected-route exchange up to `401 Unauthorized`, `WWW-Authenticate: x401`, and the x401 envelope.
+1. x401 governs the protected-route exchange up to `401 Unauthorized` and the `WWW-Authenticate: x401` challenge containing the x401 payload.
 2. OIDC4VP takes over as soon as the [[ref: Presenter]] dereferences `proof.request_uri`.
    - The `proof.request_uri` member is the OIDC4VP `request_uri` transport, and the dereferenced resource MUST satisfy OpenID4VP Section 5.7, Section 5.10.1, and RFC 9101: <https://openid.net/specs/openid-4-verifiable-presentations-1_0-final.html>, <https://datatracker.ietf.org/doc/html/rfc9101>.
 3. Presenter-to-verifier proof submission then follows standard OIDC4VP response handling.
@@ -162,22 +166,40 @@ The protocol boundary is:
    - `direct_post` and `response_uri`: OpenID4VP Section 8.2.
    - Verifier validation of `client_id` and `nonce` binding: OpenID4VP Section 8.6 and Section 14.1.2.
 4. Delegation evidence, when required, is declared by x401 metadata around the OIDC4VP request and submitted with the OIDC4VP response in the same completion transaction. x401 does not change the OIDC4VP `vp_token` structure.
-5. x401 resumes only after the verifier has accepted the OIDC4VP result and the [[ref: Presenter]] retries the original protected route with the expected retry artifact.
-6. `acquisition` never changes verification behavior. When it points to issuance, it points to standard OIDC4VCI objects such as a Credential Issuer Identifier, Credential Issuer Metadata, or a Credential Offer. See OpenID4VCI Section 4.1.3 and Section 12.2: <https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0-final.html>.
+5. x401 resumes when the verifier has accepted the OIDC4VP result and the [[ref: Presenter]] retries the original protected route with either a [[ref: VP Artifact]] or a [[ref: Verification Token]].
+6. `acquisition` never changes verification behavior. When it points to issuance, it points only to an HTTPS origin that can be resolved using OIDC4VCI issuer metadata rules, or to a DID that can be dereferenced to discover linked HTTPS origins.
 
-If a deployment uses a wallet, browser, device, or application that is separate from the [[ref: Presenter]], that deployment MUST define an explicit continuation mechanism that returns the accepted proof result or retry artifact to the [[ref: Presenter]]. Such mechanisms can include an OIDC4VP `redirect_uri`, a response code, a polling handle, a session-bound completion endpoint, or another verifier-defined handoff.
+If a deployment uses a wallet, browser, device, or application that is separate from the [[ref: Presenter]], that deployment MUST define an explicit continuation mechanism that returns the accepted proof result or retry artifact to the [[ref: Presenter]]. Such mechanisms can include an OIDC4VP `redirect_uri`, a response code, a polling handle, an OIDC4VP `response_uri` completion endpoint, or another verifier-defined handoff.
 
 ### Challenge Correlation
 
-When a verifier creates a challenge, it MUST bind the challenge instance to the protected resource context needed to evaluate the retry. This context includes the requested method, route or resource identifier, proof request, `nonce`, `state`, expiration time, and expected retry artifact.
+When a verifier creates a challenge, it MUST bind the challenge instance to the protected resource context needed to evaluate the retry. This context includes the requested method, route or resource identifier, proof request, OIDC4VP `nonce`, OIDC4VP `state` when used, expiration time, and expected retry artifact.
 
-This binding MAY be stored server-side and referenced by `challenge_id` or `state`, or encoded into a signed request object, signed `state` value, or other verifier-protected artifact. The OIDC4VP `client_id` identifies the verifier and MUST NOT be used as the identifier of the original protected-route [[ref: Presenter]].
+This binding MAY be stored server-side, but x401 does not require that storage. A verifier MAY instead encode the binding into verifier-protected artifacts such as a signed Request Object, signed or encrypted OIDC4VP `state` value, signed x401 payload, or self-contained [[ref: Verification Token]]. The OIDC4VP `client_id` identifies the verifier and MUST NOT be used as the identifier of the original protected-route [[ref: Presenter]].
+
+### Stateless Continuation
+
+x401 deployments MAY make the interaction between the protected resource and the OIDC processing endpoint stateless by making each leg context-encapsulating.
+
+In a stateless deployment:
+
+1. The x401 payload carried in `WWW-Authenticate` contains only information the presenter needs to continue, such as the OIDC4VP `request_uri`, retry artifact hints, issuance hints, and payment hints.
+2. The dereferenced OIDC4VP Request Object, the OIDC4VP `state` value, or both MUST carry the verifier-protected context needed to validate the response and evaluate the retry. This context can include the protected route, method, policy identifier, nonce, expiration, expected retry artifact, and a digest of the x401 payload.
+3. The OIDC4VP response returns the `state` value with the `vp_token` according to OpenID4VP. The verifier can reconstruct the challenge context from that protected `state` value without a server-side challenge record.
+4. A [[ref: Verification Token]], when issued, MUST be verifier-protected and carry or reference the route, policy, presenter binding, expiration, and satisfied requirements needed for later protected-route evaluation.
+5. The protected resource server and the OIDC processing endpoint MAY be separate components if they share the keys, policies, or verification services needed to validate these artifacts.
+
+The `vp_token` alone is not assumed to carry all x401 continuation context. For direct protected-route retry with proof material, the [[ref: Presenter]] MUST send a [[ref: VP Artifact]] that preserves the OIDC4VP response parameters needed by the verifier, including `state` when present.
+
+The OIDC4VP `state` parameter is not a x401 server-side state requirement. In a stateless x401 deployment, it is a standard OIDC4VP response parameter that can carry or reference verifier-protected continuation context. x401 does not define a separate `state` field.
+
+Stateless processing does not remove every need for storage. Verifiers MAY still keep server-side state for replay detection, token revocation, audit, rate limiting, or one-time challenge enforcement. If a deployment requires strict one-time-use challenges, it generally needs replay state or another shared replay-prevention mechanism.
 
 ### Proof-Plus-Payment Flow
 
 1. The [[ref: Presenter]] requests a protected route.
 2. The [[ref: Verifier]] determines that proof is required.
-3. The [[ref: Verifier]] returns `401 Unauthorized` with a [[ref: x401 Envelope]] that may also declare that payment is required separately.
+3. The [[ref: Verifier]] returns `401 Unauthorized` with a `WWW-Authenticate: x401` challenge whose [[ref: x401 Payload]] may also declare that payment is required separately.
 4. The [[ref: Presenter]] fulfills the proof requirement.
 5. The [[ref: Verifier]], or the protected route, determines that proof is satisfied but payment remains unsatisfied.
 6. The [[ref: Verifier]] returns `402 Payment Required` with payment protocol details.
@@ -191,11 +213,11 @@ sequenceDiagram
     participant Verifier
     participant Payment
     Presenter->>Verifier: Request protected route
-    Verifier-->>Presenter: 401 + x401 envelope
+    Verifier-->>Presenter: 401 + WWW-Authenticate: x401 payload="..."
     Presenter->>Presenter: Fulfill OIDC4VP request using wallet, keys, or credentials
     Presenter->>Verifier: Presentation response
     Verifier-->>Presenter: Optional verification token
-    Presenter->>Verifier: Retry or complete proof flow
+    Presenter->>Verifier: Retry with VP artifact or token
     Verifier-->>Presenter: 402 Payment Required
     Presenter->>Payment: Complete payment protocol
     Payment-->>Presenter: Payment artifact
@@ -207,7 +229,7 @@ sequenceDiagram
 
 Status Code | Meaning in a x401-capable deployment | Presenter expectation
 ----------- | ------------------------------------ | ------------------
-`401 Unauthorized` | Proof is required or not yet satisfied | Inspect `WWW-Authenticate: x401` and parse the envelope
+`401 Unauthorized` | Proof is required or not yet satisfied | Inspect `WWW-Authenticate: x401` and decode the x401 payload
 `402 Payment Required` | Payment remains unsatisfied | Switch to the payment protocol
 `403 Forbidden` | Proof was presented but policy satisfaction failed | Do not treat this as another challenge
 
@@ -221,18 +243,19 @@ Example:
 
 ```http
 HTTP/1.1 401 Unauthorized
-WWW-Authenticate: x401 challenge_id="c-123", retry_artifact="verification_token"
-Content-Type: application/json
+WWW-Authenticate: x401 payload="<base64url-x401-payload>"
 Cache-Control: no-store
 ```
 
-The response body MUST contain a x401 envelope.
+The `payload` parameter MUST contain the base64url-encoded [[ref: x401 Payload]]. A x401 challenge response SHOULD NOT require the presenter to parse a response body in order to understand the challenge.
+
+The challenge response uses `WWW-Authenticate` because `Authorization` is an HTTP request header. The presenter uses `Authorization` only when retrying the protected route with a [[ref: VP Artifact]] or [[ref: Verification Token]].
 
 ### 402 for Payment
 
 A server that requires payment MUST use `402 Payment Required` and MUST NOT overload x401 to represent payment as proof.
 
-Payment metadata MAY be declared in a x401 envelope for informational purposes when both proof and payment are required, but payment satisfaction itself remains governed by the payment protocol used with `402`.
+Payment metadata MAY be declared in a x401 payload for informational purposes when both proof and payment are required, but payment satisfaction itself remains governed by the payment protocol used with `402`.
 
 ### 403 for Failed Policy Satisfaction
 
@@ -254,20 +277,22 @@ The `WWW-Authenticate` header identifies the presence of a x401 challenge.
 A x401 challenge uses the following general form:
 
 ```http
-WWW-Authenticate: x401 challenge_id="c-123", request_ref="https://research.example.com/x401/requests/c-123", retry_artifact="verification_token"
+WWW-Authenticate: x401 payload="<base64url-x401-payload>"
 ```
 
 ### Header Parameters
 
 Name | Definition
 ---- | ----------
-`challenge_id` | A verifier-generated identifier for the challenge instance. It MUST be unique within the verifier's operational scope for the lifetime of the challenge, MAY be omitted only when the verifier can perform all required challenge correlation through other protected values such as `request_uri` or `state`, and SHOULD be included when the verifier uses OIDC4VP response endpoints, verification tokens, or proof-plus-payment orchestration.
-`request_ref` | An OPTIONAL URL reference for retrieving a proof request or related metadata. When present, `request_ref` SHOULD match `proof.request_uri`.
-`retry_artifact` | An OPTIONAL hint describing the type of artifact the verifier expects on retry, for example `raw_presentation` or `verification_token`.
+`payload` | REQUIRED. The base64url-encoded UTF-8 JSON [[ref: x401 Payload]]. The encoded value MUST omit padding. The decoded value MUST be a single JSON object.
 
-## x401 Envelope
+Other x401 challenge parameters MAY be defined by future versions of this specification. A verifier MUST NOT place authoritative x401 challenge data only in non-`payload` parameters in this version.
 
-A x401 response body MUST contain a single JSON object with the following top-level members.
+## x401 Payload
+
+A x401 payload is a single JSON object encoded into the `payload` parameter of the `WWW-Authenticate: x401` response header. The payload is base64url-encoded, using the URL and filename safe alphabet defined by RFC 4648 Section 5 without padding, so it can be carried safely as an HTTP authentication parameter.
+
+The payload SHOULD remain compact. Large, frequently changing, or sensitive data SHOULD be carried by reference, especially through `proof.request_uri` and the dereferenced OIDC4VP Request Object.
 
 ### Top-Level Members
 
@@ -275,7 +300,6 @@ A x401 response body MUST contain a single JSON object with the following top-le
 {
   "scheme": "x401",
   "version": "0.1.0",
-  "challenge_id": "c-123",
   "proof": {},
   "acquisition": {},
   "payment": {}
@@ -287,10 +311,9 @@ A x401 response body MUST contain a single JSON object with the following top-le
 Name | Definition
 ---- | ----------
 `scheme` | REQUIRED. Value MUST be the string `"x401"`.
-`version` | REQUIRED. The x401 envelope version.
-`challenge_id` | OPTIONAL, but RECOMMENDED. If present, MUST match the `challenge_id` in the `WWW-Authenticate` header when that parameter is present.
+`version` | REQUIRED. The x401 payload version.
 `proof` | REQUIRED. Contains a reference to an OIDC4VP request.
-`acquisition` | OPTIONAL. Contains issuance hints, including OIDC4VCI discovery pointers.
+`acquisition` | OPTIONAL. Contains issuance hints as HTTPS origins or DIDs.
 `payment` | OPTIONAL. Describes that payment is additionally required, without replacing `402` semantics.
 
 ## Proof Object
@@ -315,7 +338,7 @@ The proof object references the OIDC4VP request.
     "submission": "vp_token",
     "formats": ["jwt", "data_integrity"]
   },
-  "retry_artifact": "verification_token"
+  "retry_artifacts": ["vp", "verification_token"]
 }
 ```
 
@@ -327,10 +350,10 @@ Name | Definition
 `client_id` | REQUIRED. Contains the OIDC4VP `client_id` Authorization Request parameter that accompanies `request_uri`. See OpenID4VP Section 5.7 and Section 5.9: <https://openid.net/specs/openid-4-verifiable-presentations-1_0-final.html>.
 `request_uri` | REQUIRED. Contains the OIDC4VP `request_uri` value from which the Wallet obtains the Request Object. If dereferenced over HTTP, the returned object MUST satisfy OpenID4VP Section 5.10.1 and RFC 9101: <https://openid.net/specs/openid-4-verifiable-presentations-1_0-final.html>, <https://datatracker.ietf.org/doc/html/rfc9101>.
 `request_uri_method` | OPTIONAL. Contains the OIDC4VP `request_uri_method` parameter when the verifier expects POST-based Request URI retrieval. If omitted, Wallets use the default `request_uri` processing defined by RFC 9101 and OpenID4VP.
-`request_id` | OPTIONAL. A stable verifier-defined identifier for the proof request template. Unlike `challenge_id`, this value can be reused across challenge instances and routes when they ask for the same proof requirement.
+`request_id` | OPTIONAL. A stable verifier-defined identifier for the proof request template. This value can be reused across challenge instances and routes when they ask for the same proof requirement.
 `satisfied_requirements` | OPTIONAL. An array of stable verifier-defined identifiers for the reusable proof requirements that will be marked satisfied if this proof request is fulfilled. These identifiers help presenters and verifiers determine whether a [[ref: Verification Token]] from an earlier x401 challenge can satisfy a later challenge.
 `delegation` | OPTIONAL. Describes whether delegated presentation is disallowed or accepted and how [[ref: Delegation Evidence]] is submitted with the OIDC4VP response. If omitted, presenters MUST treat delegated presentation as disallowed unless they have verifier-specific configuration indicating otherwise.
-`retry_artifact` | OPTIONAL. Describes what the presenter should submit when retrying the original protected route. Example values are `raw_presentation` and `verification_token`.
+`retry_artifacts` | OPTIONAL. Array describing the artifacts the presenter may submit when retrying the original protected route. Values defined by this specification are `vp` and `verification_token`. If omitted, presenters MAY try either `vp` or `verification_token`.
 
 ### Delegation Members
 
@@ -356,6 +379,7 @@ x401 implementations that use OIDC4VP:
 9. SHOULD use short expiry windows when a signed Request Object is used.
 10. The Request Object's `aud` claim MUST follow OpenID4VP Section 5.8.
 11. SHOULD prefer a verifier-issued [[ref: Verification Token]] for subsequent route retry when doing multi-step, browser-centric, or delegated-presenter flows.
+12. MAY allow direct protected-route retry with a [[ref: VP Artifact]] for callers that do not want to obtain or manage a verifier-issued token.
 
 ### Proof Object Example
 
@@ -370,7 +394,7 @@ x401 implementations that use OIDC4VP:
   "satisfied_requirements": [
     "urn:example:x401:satisfaction:board-certified-doctor:v1"
   ],
-  "retry_artifact": "verification_token"
+  "retry_artifacts": ["vp", "verification_token"]
 }
 ```
 :::
@@ -449,7 +473,7 @@ If a [[ref: Delegation Authorization]] is present, a verifier MUST reject a dele
 
 ## Acquisition Object
 
-The acquisition object provides non-authoritative issuance hints to help the presenter obtain credentials that could satisfy the proof requirement.
+The acquisition object provides non-authoritative issuance hints to help the presenter discover OIDC4VCI issuers that may issue credentials capable of satisfying the proof requirement.
 
 The acquisition object MUST NOT redefine or weaken verifier policy. It is informational only.
 
@@ -461,18 +485,9 @@ The acquisition object MUST NOT redefine or weaken verifier policy. It is inform
 
 ```json
 {
-  "credentials": [
-    {
-      "type": "BoardCertificationCredential",
-      "issuers": [
-        {
-          "id": "did:web:medical-board.example",
-          "credential_issuer": "https://medical-board.example",
-          "credential_offer_uri": "https://medical-board.example/credential-offers/board-certification",
-          "formats": ["jwt_vc_json"]
-        }
-      ]
-    }
+  "issuers": [
+    "https://medical-board.example",
+    "did:web:medical-board.example"
   ]
 }
 ```
@@ -481,36 +496,32 @@ The acquisition object MUST NOT redefine or weaken verifier policy. It is inform
 
 Name | Definition
 ---- | ----------
-`credentials` | OPTIONAL. An array of credential acquisition hint objects.
+`issuers` | OPTIONAL. An array of [[ref: Issuance Hint]] values. Each value MUST be either an HTTPS origin string or a DID.
 
-### Credential Acquisition Hint Members
+### Issuance Hint Values
 
-Name | Definition
----- | ----------
-`type` | REQUIRED. A human-readable or ecosystem-specific credential type hint.
-`issuers` | OPTIONAL. An array of issuer hint objects.
-`marketplaces` | OPTIONAL. An array of marketplace or broker endpoints that may assist in obtaining credentials.
-`notes` | OPTIONAL. Human-readable notes about issuance.
+An HTTPS origin hint:
 
-### Issuer Hint Members
+1. MUST use the `https` scheme.
+2. MUST contain only an origin: scheme, host, and optional port.
+3. MUST NOT contain a path, query, or fragment.
+4. Is interpreted as an OIDC4VCI Credential Issuer Identifier. Presenters derive the well-known credential issuer metadata location from that origin using the OIDC4VCI metadata rules; the x401 payload does not carry the well-known URL itself.
 
-Name | Definition
----- | ----------
-`id` | OPTIONAL, but RECOMMENDED. A DID or other issuer identifier.
-`credential_issuer` | OPTIONAL. An OIDC4VCI Credential Issuer Identifier. This is not the well-known metadata URL itself. Wallets derive the metadata location from this identifier using OpenID4VCI Section 12.2.2. See OpenID4VCI Section 12.2.1, Section 12.2.2, and Section 12.2.4: <https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0-final.html>.
-`credential_offer_uri` | OPTIONAL. A reference to an OIDC4VCI Credential Offer Object. See OpenID4VCI Section 4.1.3: <https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0-final.html>.
-`authorization_servers` | OPTIONAL. An array of associated OAuth 2.0 Authorization Server identifiers, using the same meaning as the OIDC4VCI `authorization_servers` metadata member. See OpenID4VCI Section 12.2.4 and RFC 8414: <https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0-final.html>, <https://datatracker.ietf.org/doc/html/rfc8414>.
-`formats` | OPTIONAL. An array of credential formats the issuer is believed to support.
-`credential_configurations_supported` | OPTIONAL. A subset or hint of `credential_configurations_supported`, using the same structure as OIDC4VCI metadata.
+A DID hint:
+
+1. MUST be a valid DID URI.
+2. Is dereferenced by the presenter using the applicable DID method.
+3. Is used to discover linked HTTPS origins for the issuer. The exact linked-domain mechanism is ecosystem-specific and outside x401.
+4. Produces zero or more HTTPS origins, each of which is then resolved using the OIDC4VCI well-known metadata rules.
 
 ### OIDC4VCI Reuse Rules
 
 x401 acquisition hints that reference OIDC4VCI:
 
-1. If `credential_issuer` is present, it MUST be the Credential Issuer Identifier, not the `/.well-known/openid-credential-issuer` URL.
-2. Wallets resolve metadata from `credential_issuer` using OpenID4VCI Section 12.2.2.
-3. `authorization_servers` and `credential_configurations_supported`, when present, MUST retain the same semantics they have in OIDC4VCI metadata.
-4. `credential_offer_uri`, when present, MUST reference a Credential Offer Object as defined by OpenID4VCI Section 4.1.3.
+1. MUST use only the `acquisition.issuers` values defined above.
+2. MUST NOT include Credential Offer URIs, authorization server metadata, credential configuration metadata, format metadata, marketplaces, or verifier trust policy.
+3. Presenters resolve HTTPS origin hints using OpenID4VCI issuer metadata discovery. See OpenID4VCI Section 12.2.2: <https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0-final.html>.
+4. Presenters dereference DID hints to discover linked HTTPS origins, then resolve those origins using OpenID4VCI issuer metadata discovery.
 5. Hints MUST be treated by the presenter as hints only.
 6. Hints MUST NOT be used as the sole source of trust for proof validation.
 7. Hints MUST NOT be interpreted as the verifier's exclusive trusted issuer set unless separately declared in verifier policy.
@@ -519,35 +530,16 @@ x401 acquisition hints that reference OIDC4VCI:
 
 ```json
 {
-  "credentials": [
-    {
-      "type": "BoardCertificationCredential",
-      "issuers": [
-        {
-          "id": "did:web:medical-board.example",
-          "credential_issuer": "https://medical-board.example",
-          "credential_offer_uri": "https://medical-board.example/credential-offers/board-certification",
-          "authorization_servers": [
-            "https://medical-board.example/oauth"
-          ],
-          "formats": [
-            "jwt_vc_json"
-          ],
-          "credential_configurations_supported": {
-            "BoardCertificationCredential": {
-              "format": "jwt_vc_json"
-            }
-          }
-        }
-      ]
-    }
+  "issuers": [
+    "https://medical-board.example",
+    "did:web:medical-board.example"
   ]
 }
 ```
 
 ## Payment Object
 
-When both proof and payment are required, a x401 envelope MAY declare the existence of an additional payment requirement.
+When both proof and payment are required, a x401 payload MAY declare the existence of an additional payment requirement.
 
 The payment object is informational and orchestration-oriented only. It does not replace `402 Payment Required`.
 
@@ -574,18 +566,19 @@ Name | Definition
 A presenter receiving a `401 Unauthorized` response with a `WWW-Authenticate: x401 ...` challenge:
 
 1. MUST treat the response as a proof requirement.
-2. MUST parse the x401 envelope if the content type is JSON.
+2. MUST extract the `payload` parameter from the `WWW-Authenticate: x401` challenge and base64url-decode it as a UTF-8 JSON [[ref: x401 Payload]].
 3. MUST process the `proof` object to determine how to fulfill the requirement.
 4. MAY use `acquisition` hints to attempt credential discovery or issuance.
 5. MUST NOT treat acquisition hints as trusted issuer policy by themselves.
 6. MUST hand off OIDC members to standard OpenID4VP processing without renaming or reinterpretation.
 7. MAY invoke a wallet or agent subsystem to fulfill the OIDC4VP request.
-8. If `credential_offer_uri` is used, MUST follow the OIDC4VCI Credential Offer flow rather than a x401-defined issuance flow.
+8. If an acquisition issuer hint is an HTTPS origin, SHOULD resolve OIDC4VCI issuer metadata from that origin.
 9. If acting as a [[ref: Delegated Presenter]], MUST submit the requested [[ref: Delegation Evidence]] with the OIDC4VP response in the same verifier transaction.
 10. MAY retry the original route with:
-   - a raw presentation, if the verifier expects that model, or
-   - a verifier-issued [[ref: Verification Token]], if the verifier uses an OIDC4VP response endpoint model
-11. MUST send a [[ref: Verification Token]] in the `Authorization` request header when retrying with a token.
+   - a [[ref: VP Artifact]], if the presenter wants the protected route to process the presentation directly, or
+   - a verifier-issued [[ref: Verification Token]], if the presenter completed the OIDC4VP response endpoint flow
+11. If `proof.retry_artifacts` is present, MUST choose an artifact type listed there.
+12. MUST send a [[ref: VP Artifact]] or [[ref: Verification Token]] in the `Authorization` request header when retrying the protected route.
 
 ## Verifier Processing Rules
 
@@ -593,7 +586,7 @@ A verifier implementing x401:
 
 1. MUST return `401 Unauthorized` when proof is required and unsatisfied.
 2. MUST include `WWW-Authenticate: x401 ...`.
-3. MUST include a valid x401 envelope in the response body.
+3. MUST include a valid base64url-encoded x401 payload in the `payload` parameter of the `WWW-Authenticate: x401` challenge.
 4. MUST ensure the embedded or referenced OIDC4VP request is valid.
 5. MUST NOT define x401-specific aliases for OIDC4VP request or response members.
 6. SHOULD include fresh nonce values in each request instance.
@@ -602,8 +595,31 @@ A verifier implementing x401:
 9. MUST evaluate issuer trust, status, revocation, and policy constraints independently of acquisition hints.
 10. MUST validate [[ref: Delegation Evidence]] as part of the same verifier decision when a presenter is acting on behalf of another party.
 11. If issuing a [[ref: Verification Token]], MUST issue it to the [[ref: Presenter]], not merely to the credential subject, and MUST scope it to the verifier, route, policy, validity window, and satisfied proof requirements for which proof was accepted.
-12. SHOULD return `403 Forbidden` if proof is presented but policy satisfaction fails.
-13. MUST use `402 Payment Required` separately if payment is required and remains unsatisfied.
+12. MUST accept a [[ref: VP Artifact]] in the `Authorization` request header for protected-route retry unless `proof.retry_artifacts` is present and omits `vp`.
+13. SHOULD return `403 Forbidden` if proof is presented but policy satisfaction fails.
+14. MUST use `402 Payment Required` separately if payment is required and remains unsatisfied.
+
+## Authorization Request Header
+
+After receiving a x401 challenge, the presenter retries the protected route using the HTTP `Authorization` request header.
+
+When retrying with a [[ref: Verification Token]], the presenter uses the token type returned by the verifier. The token type defined by this specification is `Bearer`:
+
+```http
+Authorization: Bearer <verification-token>
+```
+
+When retrying with OIDC4VP proof material directly, the presenter uses the `x401` authorization scheme:
+
+```http
+Authorization: x401 vp="<base64url-oidc4vp-response-json>"
+```
+
+The `vp` value is the base64url-encoded UTF-8 JSON serialization of the OIDC4VP response parameters needed by the verifier, using the same no-padding encoding as the x401 payload. It MUST preserve standard OpenID4VP member names, including `vp_token`, `state`, and `presentation_submission` when those values are present.
+
+`vp_token` is an OIDC4VP response member inside the decoded `vp` artifact. It is not a separate x401 retry artifact.
+
+A protected route that advertises `vp` in `proof.retry_artifacts` MUST process the supplied value as a proof submission attempt. If verification succeeds, the verifier MAY return the protected resource directly or MAY return a [[ref: Verification Token]] for subsequent retries.
 
 ## Retry Models
 
@@ -611,24 +627,30 @@ x401 supports two broad retry models.
 
 Model | Retry artifact | Best fit
 ----- | -------------- | --------
-Raw presentation retry | A presentation or proof artifact is sent back to the protected route | Direct API-to-API flows
+VP retry | A [[ref: VP Artifact]] is sent back to the protected route | Direct API-to-API flows and callers that do not want to manage a token
 Verification token retry | A verifier-issued [[ref: Verification Token]] is sent on retry | Browser-centric, delegated, and multi-step flows
 
-### Model A: Raw Presentation Retry
+### Model A: VP Retry
 
-The presenter fulfills the OIDC4VP request and retries the original route with the resulting proof material.
+The presenter fulfills the OIDC4VP request and retries the original route with a [[ref: VP Artifact]] in the `Authorization` request header. This model lets the protected resource process the presentation without requiring the presenter to obtain or manage a verifier-issued token.
+
+A [[ref: VP Artifact]] is the base64url-encoded UTF-8 JSON serialization of the OIDC4VP response parameters needed by the verifier, using the same no-padding encoding as the x401 payload. The object MUST preserve standard OIDC4VP member names. When the OIDC4VP response includes `state` or `presentation_submission`, those members MUST be included with `vp_token` inside the decoded `vp` artifact.
 
 Example:
 
 ```http
 GET /restricted/resource HTTP/1.1
 Host: research.example.com
-Authorization: x401 proof="eyJhbGciOi..."
+Authorization: x401 vp="<base64url-oidc4vp-response-json>"
 ```
+
+`vp_token` is an OIDC4VP response member inside the decoded `vp` artifact. It is not a separate x401 retry artifact.
 
 ### Model B: Verification Token Retry
 
-The presenter fulfills the OIDC4VP request through the OIDC4VP response endpoint, for example the `response_uri` used with `direct_post`, and the verifier issues a [[ref: Verification Token]] that the presenter uses when retrying the original route.
+The presenter fulfills the OIDC4VP request through the OIDC4VP response endpoint identified by the Request Object. For `response_mode=direct_post`, this is the OIDC4VP `response_uri`.
+
+After that endpoint verifies the OIDC4VP response, it MAY return a [[ref: Verification Token]]. The presenter uses that token when retrying the original route.
 
 Retry example:
 
@@ -654,31 +676,43 @@ A verifier MAY issue a [[ref: Verification Token]] after accepting an OIDC4VP re
 4. MUST expire, and SHOULD be short-lived.
 5. SHOULD include a unique token identifier or otherwise support replay detection and revocation.
 
-When a verifier returns a [[ref: Verification Token]] from a x401 completion endpoint, such as the endpoint identified by an OIDC4VP `response_uri`, the response body SHOULD use this JSON shape:
+The response that carries a [[ref: Verification Token]] is intentionally compatible with an OAuth 2.0 successful access token response. The `access_token` value is the [[ref: Verification Token]], and the `token_type` value tells the presenter how to use that token on the protected-route retry. A deployment MAY issue and validate this token through existing OAuth infrastructure, but x401 does not define a new OAuth grant type or require every x401 verifier to operate as an OAuth authorization server.
+
+The endpoint that produces a [[ref: Verification Token]] is the OIDC4VP response endpoint named by the Request Object. For `direct_post`, the presenter or wallet sends the OIDC4VP response to the `response_uri` using the standard OpenID4VP response encoding:
+
+```http
+POST /x401/complete/proof-001 HTTP/1.1
+Host: research.example.com
+Content-Type: application/x-www-form-urlencoded
+
+state=<state>&vp_token=<vp-token>&presentation_submission=<presentation-submission>
+```
+
+When the verifier accepts that OIDC4VP response and elects to issue a [[ref: Verification Token]], the response body SHOULD use this OAuth-compatible JSON shape:
 
 ```json
 {
+  "access_token": "eyJhbGciOi...",
   "token_type": "Bearer",
-  "verification_token": "eyJhbGciOi...",
   "expires_in": 300,
-  "challenge_id": "proof-001",
-  "request_id": "proof-template-board-certified-doctor-v1",
-  "satisfied_requirements": [
+  "x401_request_id": "proof-template-board-certified-doctor-v1",
+  "x401_satisfied_requirements": [
     "urn:example:x401:satisfaction:board-certified-doctor:v1"
   ]
 }
 ```
 
+The response carrying this body SHOULD include `Cache-Control: no-store` and `Pragma: no-cache`.
+
 Name | Definition
 ---- | ----------
+`access_token` | REQUIRED. The opaque or structured [[ref: Verification Token]] value issued to the [[ref: Presenter]].
 `token_type` | REQUIRED. The HTTP authorization scheme the presenter uses with the token. The value defined by this specification is `Bearer`.
-`verification_token` | REQUIRED. The opaque or structured token value issued to the [[ref: Presenter]].
 `expires_in` | RECOMMENDED. Lifetime of the token in seconds from the time the response is generated.
-`challenge_id` | RECOMMENDED. The x401 challenge that produced the token.
-`request_id` | RECOMMENDED when the x401 proof request included `proof.request_id`.
-`satisfied_requirements` | RECOMMENDED when the x401 proof request included `proof.satisfied_requirements`. Contains the reusable proof requirements the verifier accepted.
+`x401_request_id` | RECOMMENDED when the x401 proof request included `proof.request_id`.
+`x401_satisfied_requirements` | RECOMMENDED when the x401 proof request included `proof.satisfied_requirements`. Contains the reusable proof requirements the verifier accepted.
 
-When a [[ref: Verification Token]] is represented as a JWT, its exact claim set is deployment-specific. The token SHOULD identify the [[ref: Presenter]]. If the token was issued after delegated presentation, it SHOULD include the `jti` or a digest of the [[ref: Delegation Authorization]] that was accepted. The credential subject MAY be recorded as evidence context, but it MUST NOT be the token holder identity unless it is also the [[ref: Presenter]]. The token SHOULD include the accepted `request_id` and `satisfied_requirements` values when those values were present in the x401 proof request.
+When a [[ref: Verification Token]] is represented as a JWT, its exact claim set is deployment-specific. The token SHOULD identify the [[ref: Presenter]]. If the token was issued after delegated presentation, it SHOULD include the `jti` or a digest of the [[ref: Delegation Authorization]] that was accepted. The credential subject MAY be recorded as evidence context, but it MUST NOT be the token holder identity unless it is also the [[ref: Presenter]]. The token SHOULD include the accepted `proof.request_id` and `proof.satisfied_requirements` values when those values were present in the x401 proof request.
 
 Presenters MUST send a [[ref: Verification Token]] in the HTTP `Authorization` request header when retrying the protected route. Bearer tokens use the RFC 6750 `Bearer` scheme:
 
@@ -695,10 +729,10 @@ x401 uses `proof.request_id` and `proof.satisfied_requirements` for reusable pro
 1. the token is valid for the verifier audience and current protected resource;
 2. the token has not expired or been revoked;
 3. the token is issued to the current [[ref: Presenter]];
-4. the token's `satisfied_requirements` values cover the later route's `proof.satisfied_requirements`;
+4. the token's accepted proof requirements cover the later route's `proof.satisfied_requirements`;
 5. any freshness, status, assurance, delegation, and policy constraints still hold.
 
-Presenters MAY use the `satisfied_requirements` metadata returned with a [[ref: Verification Token]] to decide whether to try the token on a later route. The verifier remains authoritative and SHOULD return a new x401 challenge when the token is valid but does not satisfy the later route.
+Presenters MAY use the `x401_satisfied_requirements` metadata returned with a [[ref: Verification Token]] to decide whether to try the token on a later route. The verifier remains authoritative and SHOULD return a new x401 challenge when the token is valid but does not satisfy the later route.
 
 ## Examples
 
@@ -715,16 +749,16 @@ Host: research.example.com
 
 ```http
 HTTP/1.1 401 Unauthorized
-WWW-Authenticate: x401 challenge_id="proof-001", request_ref="https://research.example.com/x401/requests/proof-001", retry_artifact="verification_token"
-Content-Type: application/json
+WWW-Authenticate: x401 payload="<base64url-x401-payload>"
 Cache-Control: no-store
 ```
+
+Decoded x401 payload, shown for readability:
 
 ```json
 {
   "scheme": "x401",
   "version": "0.1.0",
-  "challenge_id": "proof-001",
   "proof": {
     "request_format": "openid4vp",
     "client_id": "x509_san_dns:research.example.com",
@@ -734,25 +768,47 @@ Cache-Control: no-store
     "satisfied_requirements": [
       "urn:example:x401:satisfaction:board-certified-doctor:v1"
     ],
-    "retry_artifact": "verification_token"
+    "retry_artifacts": ["vp", "verification_token"]
   },
   "acquisition": {
-    "credentials": [
-      {
-        "type": "BoardCertificationCredential",
-        "issuers": [
-          {
-            "id": "did:web:medical-board.example",
-            "credential_issuer": "https://medical-board.example",
-            "credential_offer_uri": "https://medical-board.example/credential-offers/board-certification",
-            "formats": [
-              "jwt_vc_json"
-            ]
-          }
-        ]
-      }
+    "issuers": [
+      "https://medical-board.example",
+      "did:web:medical-board.example"
     ]
   }
+}
+```
+
+### Token-Producing Completion Request
+
+The OIDC4VP Request Object dereferenced from `proof.request_uri` contains a `response_uri`. After fulfilling the proof request, the presenter or wallet posts the OIDC4VP response there:
+
+```http
+POST /x401/complete/proof-001 HTTP/1.1
+Host: research.example.com
+Content-Type: application/x-www-form-urlencoded
+
+state=<state>&vp_token=<vp-token>&presentation_submission=<presentation-submission>
+```
+
+If verification succeeds and the verifier chooses token retry, the completion endpoint returns:
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+Cache-Control: no-store
+Pragma: no-cache
+```
+
+```json
+{
+  "access_token": "eyJhbGciOi...",
+  "token_type": "Bearer",
+  "expires_in": 300,
+  "x401_request_id": "proof-template-board-certified-doctor-v1",
+  "x401_satisfied_requirements": [
+    "urn:example:x401:satisfaction:board-certified-doctor:v1"
+  ]
 }
 ```
 
@@ -762,6 +818,16 @@ Cache-Control: no-store
 GET /papers/medical-study-123 HTTP/1.1
 Host: research.example.com
 Authorization: Bearer eyJhbGciOi...
+```
+
+### Alternative Retry Without Token
+
+If the caller does not want to obtain or manage a verification token, it can retry with a VP artifact:
+
+```http
+GET /papers/medical-study-123 HTTP/1.1
+Host: research.example.com
+Authorization: x401 vp="<base64url-oidc4vp-response-json>"
 ```
 
 ## Example 2: Proof Plus Payment
@@ -777,16 +843,16 @@ Host: research.example.com
 
 ```http
 HTTP/1.1 401 Unauthorized
-WWW-Authenticate: x401 challenge_id="proofpay-001", retry_artifact="verification_token"
-Content-Type: application/json
+WWW-Authenticate: x401 payload="<base64url-x401-payload>"
 Cache-Control: no-store
 ```
+
+Decoded x401 payload, shown for readability:
 
 ```json
 {
   "scheme": "x401",
   "version": "0.1.0",
-  "challenge_id": "proofpay-001",
   "proof": {
     "request_format": "openid4vp",
     "client_id": "x509_san_dns:research.example.com",
@@ -796,26 +862,12 @@ Cache-Control: no-store
     "satisfied_requirements": [
       "urn:example:x401:satisfaction:board-certified-doctor:v1"
     ],
-    "retry_artifact": "verification_token"
+    "retry_artifacts": ["vp", "verification_token"]
   },
   "acquisition": {
-    "credentials": [
-      {
-        "type": "BoardCertificationCredential",
-        "issuers": [
-          {
-            "id": "did:web:medical-board.example",
-            "credential_issuer": "https://medical-board.example",
-            "credential_offer_uri": "https://medical-board.example/credential-offers/board-certification",
-            "authorization_servers": [
-              "https://medical-board.example/oauth"
-            ],
-            "formats": [
-              "jwt_vc_json"
-            ]
-          }
-        ]
-      }
+    "issuers": [
+      "https://medical-board.example",
+      "did:web:medical-board.example"
     ]
   },
   "payment": {
@@ -879,7 +931,7 @@ In this example, `did:web:agent.example` is presenting on behalf of a user. The 
     "submission": "vp_token",
     "formats": ["jwt", "data_integrity"]
   },
-  "retry_artifact": "verification_token"
+  "retry_artifacts": ["vp", "verification_token"]
 }
 ```
 
@@ -931,16 +983,16 @@ After validating the presentation, delegation authorization, and delegated prese
 HTTP/1.1 200 OK
 Content-Type: application/json
 Cache-Control: no-store
+Pragma: no-cache
 ```
 
 ```json
 {
+  "access_token": "eyJhbGciOi...",
   "token_type": "Bearer",
-  "verification_token": "eyJhbGciOi...",
   "expires_in": 300,
-  "challenge_id": "proof-agent-001",
-  "request_id": "proof-template-board-certified-doctor-v1",
-  "satisfied_requirements": [
+  "x401_request_id": "proof-template-board-certified-doctor-v1",
+  "x401_satisfied_requirements": [
     "urn:example:x401:satisfaction:board-certified-doctor:v1"
   ]
 }
@@ -960,6 +1012,8 @@ Authorization: Bearer eyJhbGciOi...
 
 OIDC4VP requests used within x401 SHOULD include fresh nonce values and short expiries. Verifiers SHOULD reject stale or replayed proofs.
 
+Stateless deployments SHOULD use short expiration windows and verifier-protected `state` values. Strict one-time-use challenge enforcement requires replay tracking or an equivalent shared replay-prevention mechanism.
+
 ### Audience Binding
 
 Returned presentations MUST be bound to the OIDC4VP `client_id` and `nonce` values used in the Authorization Request, as required by OpenID4VP Section 14.1.2.
@@ -972,7 +1026,9 @@ Acquisition hints MUST NOT be treated as sufficient trust material. Verifiers MU
 
 ### Proof Submission
 
-Verifiers SHOULD prefer [[ref: Verification Token]] retry in multi-step flows to avoid repeatedly transmitting large raw presentations.
+Verifiers SHOULD prefer [[ref: Verification Token]] retry in multi-step flows to avoid repeatedly transmitting large VP artifacts. Verifiers that accept direct VP retry SHOULD consider header size limits and SHOULD use compact or referenced proof formats where possible.
+
+The x401 payload is visible to the presenter and to intermediaries that can observe decrypted HTTP traffic. Sensitive challenge context SHOULD be omitted, referenced, signed and encrypted, or placed only in verifier-protected OIDC artifacts.
 
 ### Delegated Presentation
 
@@ -1011,10 +1067,11 @@ This draft does not yet request any IANA registrations.
 A conforming x401 verifier:
 
 - returns `401 Unauthorized` when proof is required and unsatisfied
-- includes `WWW-Authenticate: x401 ...`
-- returns a valid x401 envelope
+- includes `WWW-Authenticate: x401 payload="..."`
+- returns a valid base64url-encoded x401 payload in the challenge header
 - uses OIDC4VP for the proof request
 - validates delegated presenter evidence when delegated presentation is accepted
+- accepts VP artifacts in the `Authorization` header unless `proof.retry_artifacts` restricts them
 - issues verification tokens to the presenter when token retry is used
 - optionally includes OIDC4VCI issuance hints
 - keeps payment separate under `402 Payment Required`
@@ -1022,10 +1079,10 @@ A conforming x401 verifier:
 A conforming x401 presenter:
 
 - recognizes `WWW-Authenticate: x401`
-- processes the x401 envelope
+- decodes and processes the x401 payload from the `payload` challenge parameter
 - fulfills or escalates the OIDC4VP proof request
 - submits delegation evidence with the OIDC4VP response when acting as a delegated presenter
-- sends verification tokens in the `Authorization` header when token retry is used
+- sends VP artifacts or verification tokens in the `Authorization` header when retrying protected routes
 - treats OIDC4VCI acquisition hints as optional and non-authoritative
 - supports separate handling of `402 Payment Required`
 
@@ -1036,6 +1093,7 @@ A conforming x401 presenter:
 - [RFC 9110: HTTP Semantics](https://datatracker.ietf.org/doc/html/rfc9110)
 - [RFC 2119: Key words for use in RFCs to Indicate Requirement Levels](https://datatracker.ietf.org/doc/html/rfc2119)
 - [RFC 8174: Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words](https://datatracker.ietf.org/doc/html/rfc8174)
+- [RFC 4648: The Base16, Base32, and Base64 Data Encodings](https://datatracker.ietf.org/doc/html/rfc4648)
 - [RFC 6749: The OAuth 2.0 Authorization Framework](https://datatracker.ietf.org/doc/html/rfc6749)
 - [RFC 6750: The OAuth 2.0 Authorization Framework: Bearer Token Usage](https://datatracker.ietf.org/doc/html/rfc6750)
 - [RFC 7519: JSON Web Token](https://datatracker.ietf.org/doc/html/rfc7519)
@@ -1049,9 +1107,9 @@ A conforming x401 presenter:
 - [W3C Verifiable Credentials Data Model](https://www.w3.org/TR/vc-data-model/)
 - [W3C Digital Credentials API](https://www.w3.org/TR/digital-credentials/)
 
-## Appendix A: Minimal Envelope
+## Appendix A: Minimal Payload
 
-::: example Minimal x401 Envelope
+::: example Minimal x401 Payload
 ```json
 {
   "scheme": "x401",
@@ -1062,6 +1120,12 @@ A conforming x401 presenter:
     "request_uri": "https://research.example.com/x401/requests/c-123"
   }
 }
+```
+
+The JSON object above is carried in the challenge header as:
+
+```http
+WWW-Authenticate: x401 payload="<base64url-minimal-x401-payload>"
 ```
 :::
 

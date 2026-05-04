@@ -1,7 +1,7 @@
-import { spawnSync } from "node:child_process";
 import { cp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import specUp from "spec-up";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,24 +12,10 @@ const siteSourceDir = path.join(repoRoot, "public", "site");
 const demoLandingPage = path.join(repoRoot, "public", "demo", "index.html");
 const mermaidDistDir = path.join(nodeModulesDir, "mermaid", "dist");
 
+process.chdir(repoRoot);
+
 await rm(outputDir, { recursive: true, force: true });
-
-const renderSpec = spawnSync(
-  process.execPath,
-  [
-    "--input-type=module",
-    "-e",
-    "const { default: specUp } = await import('spec-up'); specUp({ nowatch: true });",
-  ],
-  {
-    cwd: repoRoot,
-    stdio: "inherit",
-  },
-);
-
-if (renderSpec.status !== 0) {
-  process.exit(renderSpec.status ?? 1);
-}
+await specUp({ nowatch: true });
 
 const siteEntries = await readdir(siteSourceDir);
 

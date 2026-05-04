@@ -1,9 +1,9 @@
-import { spawn } from "node:child_process";
 import fs from "node:fs";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
+import specUp from "spec-up";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,6 +14,8 @@ const demoSourceDir = path.join(repoRoot, "public", "demo");
 const builtSpecDir = path.join(repoRoot, "www", "spec");
 const mermaidDistDir = path.join(nodeModulesDir, "mermaid", "dist");
 const port = Number(process.env.PORT ?? 4011);
+
+process.chdir(repoRoot);
 
 const htmlRoots = [
   { prefix: "/spec", dir: builtSpecDir },
@@ -32,30 +34,7 @@ const liveReloadClient = `
 </script>`;
 
 async function buildSpec() {
-  await new Promise((resolve, reject) => {
-    const child = spawn(
-      process.execPath,
-      [
-        "--input-type=module",
-        "-e",
-        "const { default: specUp } = await import('spec-up'); specUp({ nowatch: true });",
-      ],
-      {
-        cwd: repoRoot,
-        stdio: "inherit",
-      },
-    );
-
-    child.once("error", reject);
-    child.once("exit", (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-
-      reject(new Error(`spec render exited with status ${code ?? "unknown"}`));
-    });
-  });
+  await specUp({ nowatch: true });
 }
 
 function injectLiveReload(html) {
