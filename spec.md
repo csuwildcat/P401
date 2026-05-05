@@ -203,7 +203,7 @@ x401 deployments MAY make the interaction between the protected resource and the
 
 In a stateless deployment:
 
-1. The x401 payload carried in `WWW-Authenticate` contains only information the presenter needs to continue, such as the OIDC4VP `request_uri`, retry artifact hints, issuance hints, and payment hints.
+1. The x401 payload carried in `WWW-Authenticate` contains only information the presenter needs to continue, such as the OIDC4VP `request_uri`, retry artifact hints, issuance hints, and payment terms or hints.
 2. The dereferenced OIDC4VP Request Object, the OIDC4VP `state` value, or both MUST carry the verifier-protected context needed to validate the response and evaluate the retry. This context can include the protected route, method, policy identifier, nonce, expiration, expected retry artifact, and a digest of the x401 payload.
 3. The OIDC4VP response returns the `state` value with the `vp_token` according to OpenID4VP. The verifier can reconstruct the challenge context from that protected `state` value without a server-side challenge record.
 4. A [[ref: Verification Token]], when issued, MUST be verifier-protected and carry or reference the route, policy, presenter binding, expiration, and satisfied requirements needed for later protected-route evaluation.
@@ -219,7 +219,7 @@ Stateless processing does not remove every need for storage. Verifiers MAY still
 
 1. The [[ref: Presenter]] requests a protected route.
 2. The [[ref: Verifier]] determines that proof is required.
-3. The [[ref: Verifier]] returns `401 Unauthorized` with a `WWW-Authenticate: x401` challenge whose [[ref: x401 Payload]] may also declare that payment is required separately.
+3. The [[ref: Verifier]] returns `401 Unauthorized` with a `WWW-Authenticate: x401` challenge whose [[ref: x401 Payload]] may also declare that payment is required separately and include decision-relevant payment terms.
 4. The [[ref: Presenter]] obtains a [[ref: Device Polling Handle]] and hands the OIDC4VP request to the [[ref: Wallet]].
 5. The [[ref: Wallet]] completes the OIDC4VP presentation with the [[ref: Verifier]].
 6. The [[ref: Presenter]] polls the token endpoint and receives a [[ref: Verification Token]] if proof is accepted.
@@ -282,6 +282,8 @@ The challenge response uses `WWW-Authenticate` because `Authorization` is an HTT
 A server that requires payment MUST use `402 Payment Required` and MUST NOT overload x401 to represent payment as proof.
 
 Payment metadata MAY be declared in a x401 payload for informational purposes when both proof and payment are required, but payment satisfaction itself remains governed by the payment protocol used with `402`.
+
+When payment is known to be required before proof is submitted, the verifier SHOULD include enough payment metadata in the x401 payload for the presenter to decide whether to continue before disclosing identity or credential-derived information. This metadata can include amount, currency or asset, supported payment schemes, quote expiration, and a URI where protocol-specific payment request details can be obtained. If the final `402 Payment Required` response materially differs from the payment metadata declared in the x401 payload, the presenter MAY abandon the transaction or restart the proof flow.
 
 ### 403 for Failed Policy Satisfaction
 
@@ -506,15 +508,26 @@ x401 acquisition hints that reference OIDC4VCI:
 
 When both proof and payment are required, a x401 payload MAY declare the existence of an additional payment requirement.
 
-The payment object is informational and orchestration-oriented only. It does not replace `402 Payment Required`.
+The payment object is informational and orchestration-oriented only. It does not replace `402 Payment Required`. Its purpose is to let a presenter evaluate the cost and supported payment methods before deciding whether to submit identity or credential-derived proof. The selected payment protocol remains authoritative for payment settlement, payment authentication, and payment artifact format.
 
 ### Example
 
 ```json
 {
   "required": true,
-  "scheme_hint": "x402",
-  "notes": "Payment is required after proof is satisfied."
+  "schemes": ["x402"],
+  "supported_currencies": ["USD", "USDC"],
+  "options": [
+    {
+      "scheme": "x402",
+      "amount": "0.25",
+      "currency": "USD",
+      "description": "Premium medical study access",
+      "expires_at": "2026-05-05T18:00:00Z",
+      "payment_request_uri": "https://research.example.com/x402/payment-requests/premium-medical-study-42"
+    }
+  ],
+  "notes": "Payment is required after proof is satisfied. The final payment request is returned with 402."
 }
 ```
 
@@ -523,8 +536,26 @@ The payment object is informational and orchestration-oriented only. It does not
 Name | Definition
 ---- | ----------
 `required` | OPTIONAL. Boolean indicating whether payment is additionally required.
-`scheme_hint` | OPTIONAL. A hint naming the expected payment protocol.
+`scheme_hint` | OPTIONAL. A hint naming the expected payment protocol. If multiple protocols are supported, use `schemes`.
+`schemes` | OPTIONAL. Array of payment protocol identifiers the verifier expects to support for this resource, for example `x402`.
+`supported_currencies` | OPTIONAL. Array of currency, token, or asset identifiers that may be accepted for payment. Currency identifiers SHOULD use ISO 4217 codes when referring to fiat currencies. Other assets SHOULD use identifiers defined by the selected payment protocol.
+`options` | OPTIONAL. Array of payment options or quotes known at challenge time. Each option describes one way the presenter may satisfy the payment requirement.
+`payment_request_uri` | OPTIONAL. URI where the presenter can obtain protocol-specific payment request details. This URI is informational in the x401 payload; payment remains governed by the protocol used with `402 Payment Required`.
 `notes` | OPTIONAL. Human-readable notes.
+
+### Payment Option Members
+
+Name | Definition
+---- | ----------
+`scheme` | OPTIONAL. Payment protocol identifier for this option.
+`amount` | OPTIONAL. Decimal string amount expected for this option. Amounts MUST be interpreted according to `currency`, `asset`, and the selected payment protocol.
+`currency` | OPTIONAL. Currency, token, or asset identifier for the amount. Fiat currencies SHOULD use ISO 4217 codes. Non-fiat identifiers are payment-protocol-defined.
+`asset` | OPTIONAL. Payment-protocol-specific asset identifier when `currency` alone is insufficient.
+`network` | OPTIONAL. Payment-protocol-specific network or settlement system identifier.
+`recipient` | OPTIONAL. Payment-protocol-specific recipient or merchant identifier.
+`description` | OPTIONAL. Human-readable description of what the payment covers.
+`expires_at` | OPTIONAL. Time after which the quoted option may no longer be valid.
+`payment_request_uri` | OPTIONAL. URI where the presenter can obtain protocol-specific payment request details for this option.
 
 ## Presenter Processing Rules
 
@@ -533,18 +564,19 @@ A presenter receiving a `401 Unauthorized` response with a `WWW-Authenticate: x4
 1. MUST treat the response as a proof requirement.
 2. MUST extract the `payload` parameter from the `WWW-Authenticate: x401` challenge and base64url-decode it as a UTF-8 JSON [[ref: x401 Payload]].
 3. MUST process the `proof` object to determine how to fulfill the requirement.
-4. MAY use `acquisition` hints to attempt credential discovery or issuance.
-5. MUST NOT treat acquisition hints as trusted issuer policy by themselves.
-6. MUST hand off OIDC members to standard OpenID4VP processing without renaming or reinterpretation.
-7. MAY invoke a wallet or agent subsystem to fulfill the OIDC4VP request.
-8. If an acquisition issuer hint is an HTTPS origin, SHOULD resolve OIDC4VCI issuer metadata from that origin.
-9. If `proof.device_authorization` is present and the wallet will submit the OIDC4VP response directly to the verifier, SHOULD obtain a standard `device_code` from `proof.device_authorization.device_authorization_endpoint`.
-10. If using Device Authorization, MUST poll `proof.device_authorization.token_endpoint` with the standard Device Authorization Grant and MUST follow the `interval`, `authorization_pending`, `slow_down`, `access_denied`, and `expired_token` behavior defined by RFC 8628.
-11. MAY retry the original route with:
+4. MAY evaluate `payment` metadata before fulfilling the proof request and MAY decline or defer proof submission when payment terms are unacceptable or insufficiently described.
+5. MAY use `acquisition` hints to attempt credential discovery or issuance.
+6. MUST NOT treat acquisition hints as trusted issuer policy by themselves.
+7. MUST hand off OIDC members to standard OpenID4VP processing without renaming or reinterpretation.
+8. MAY invoke a wallet or agent subsystem to fulfill the OIDC4VP request.
+9. If an acquisition issuer hint is an HTTPS origin, SHOULD resolve OIDC4VCI issuer metadata from that origin.
+10. If `proof.device_authorization` is present and the wallet will submit the OIDC4VP response directly to the verifier, SHOULD obtain a standard `device_code` from `proof.device_authorization.device_authorization_endpoint`.
+11. If using Device Authorization, MUST poll `proof.device_authorization.token_endpoint` with the standard Device Authorization Grant and MUST follow the `interval`, `authorization_pending`, `slow_down`, `access_denied`, and `expired_token` behavior defined by RFC 8628.
+12. MAY retry the original route with:
    - a [[ref: VP Artifact]], if the presenter wants the protected route to process the presentation directly, or
    - a verifier-issued [[ref: Verification Token]], if the presenter completed the OIDC4VP response endpoint flow
-12. If `proof.retry_artifacts` is present, MUST choose an artifact type listed there.
-13. MUST send a [[ref: VP Artifact]] or [[ref: Verification Token]] in the `Authorization` request header when retrying the protected route.
+13. If `proof.retry_artifacts` is present, MUST choose an artifact type listed there.
+14. MUST send a [[ref: VP Artifact]] or [[ref: Verification Token]] in the `Authorization` request header when retrying the protected route.
 
 ## Verifier Processing Rules
 
@@ -564,8 +596,9 @@ A verifier implementing x401:
 12. If advertising `proof.device_authorization`, MUST implement the OAuth 2.0 Device Authorization Grant at the advertised endpoints.
 13. If advertising `proof.device_authorization`, MUST bind the issued `device_code` to the OIDC4VP `state`, `nonce`, proof request, protected route context, expiration, and expected retry artifact for the same x401 challenge.
 14. If advertising `proof.device_authorization`, MUST return standard RFC 8628 polling errors until proof is accepted, denied, expired, or otherwise failed.
-15. SHOULD return `403 Forbidden` if proof is presented but policy satisfaction fails.
-16. MUST use `402 Payment Required` separately if payment is required and remains unsatisfied.
+15. If both proof and payment are required and payment terms are known when generating the x401 challenge, SHOULD include decision-relevant payment metadata in the `payment` object.
+16. SHOULD return `403 Forbidden` if proof is presented but policy satisfaction fails.
+17. MUST use `402 Payment Required` separately if payment is required and remains unsatisfied.
 
 ## Authorization Request Header
 
@@ -940,8 +973,19 @@ Decoded x401 payload, shown for readability:
   },
   "payment": {
     "required": true,
-    "scheme_hint": "x402",
-    "notes": "Payment is required after proof is satisfied."
+    "schemes": ["x402"],
+    "supported_currencies": ["USD", "USDC"],
+    "options": [
+      {
+        "scheme": "x402",
+        "amount": "0.25",
+        "currency": "USD",
+        "description": "Premium medical study access",
+        "expires_at": "2026-05-05T18:00:00Z",
+        "payment_request_uri": "https://research.example.com/x402/payment-requests/premium-medical-study-42"
+      }
+    ],
+    "notes": "Payment is required after proof is satisfied. The final payment request is returned with 402."
   }
 }
 ```
@@ -962,7 +1006,8 @@ Cache-Control: no-store
     "scheme": "x402",
     "amount": "0.25",
     "currency": "USD",
-    "description": "Premium medical study access"
+    "description": "Premium medical study access",
+    "payment_request_uri": "https://research.example.com/x402/payment-requests/premium-medical-study-42"
   }
 }
 ```
@@ -1072,6 +1117,8 @@ OIDC4VP `state` values are correlation values, not OAuth polling credentials. Th
 
 Implementations MUST keep proof and payment semantics separate. A proof artifact MUST NOT be treated as payment, and payment satisfaction MUST NOT be treated as proof satisfaction.
 
+Payment metadata in a x401 payload is for pre-proof decisioning only. It MUST NOT be treated as payment authorization, payment settlement, or a completed payment request unless the selected payment protocol explicitly defines that behavior in the later `402 Payment Required` exchange.
+
 ## Privacy Considerations
 
 ### Data Minimization
@@ -1103,6 +1150,7 @@ A conforming x401 verifier:
 - accepts VP artifacts in the `Authorization` header unless `proof.retry_artifacts` restricts them
 - issues verification tokens to the presenter when token retry is used
 - optionally includes OIDC4VCI issuance hints
+- includes decision-relevant payment metadata before proof submission when payment is required and terms are known
 - keeps payment separate under `402 Payment Required`
 
 A conforming x401 presenter:
@@ -1113,6 +1161,7 @@ A conforming x401 presenter:
 - obtains and polls with a standard OAuth 2.0 `device_code` when wallet-mediated polling is used
 - sends VP artifacts or verification tokens in the `Authorization` header when retrying protected routes
 - treats OIDC4VCI acquisition hints as optional and non-authoritative
+- can evaluate payment metadata before deciding whether to submit proof
 - supports separate handling of `402 Payment Required`
 
 ## References
