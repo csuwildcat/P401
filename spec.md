@@ -283,7 +283,7 @@ A server that requires payment MUST use `402 Payment Required` and MUST NOT over
 
 Payment metadata MAY be declared in a x401 payload for informational purposes when both proof and payment are required, but payment satisfaction itself remains governed by the payment protocol used with `402`.
 
-When payment is known to be required before proof is submitted, the verifier SHOULD include enough payment metadata in the x401 payload for the presenter to decide whether to continue before disclosing identity or credential-derived information. This metadata can include amount, currency or asset, supported payment schemes, quote expiration, and a URI where protocol-specific payment request details can be obtained. If the final `402 Payment Required` response materially differs from the payment metadata declared in the x401 payload, the presenter MAY abandon the transaction or restart the proof flow.
+When payment is known to be required before proof is submitted, the verifier SHOULD include enough payment metadata in the x401 payload for the presenter to decide whether to continue before disclosing identity or credential-derived information. This metadata can include amount, currency or asset, supported payment schemes, and quote expiration. Protocol-specific payment request details remain part of the later `402 Payment Required` exchange. If the final `402 Payment Required` response materially differs from the payment metadata declared in the x401 payload, the presenter MAY abandon the transaction or restart the proof flow.
 
 ### 403 for Failed Policy Satisfaction
 
@@ -516,18 +516,23 @@ The payment object is informational and orchestration-oriented only. It does not
 {
   "required": true,
   "schemes": ["x402"],
-  "supported_currencies": ["USD", "USDC"],
   "options": [
     {
       "scheme": "x402",
       "amount": "0.25",
       "currency": "USD",
       "description": "Premium medical study access",
-      "expires_at": "2026-05-05T18:00:00Z",
-      "payment_request_uri": "https://research.example.com/x402/payment-requests/premium-medical-study-42"
+      "expires_at": "2026-05-05T18:00:00Z"
+    },
+    {
+      "scheme": "x402",
+      "amount": "0.20",
+      "currency": "USDC",
+      "network": "base",
+      "description": "Premium medical study access",
+      "expires_at": "2026-05-05T18:00:00Z"
     }
-  ],
-  "notes": "Payment is required after proof is satisfied. The final payment request is returned with 402."
+  ]
 }
 ```
 
@@ -536,12 +541,8 @@ The payment object is informational and orchestration-oriented only. It does not
 Name | Definition
 ---- | ----------
 `required` | OPTIONAL. Boolean indicating whether payment is additionally required.
-`scheme_hint` | OPTIONAL. A hint naming the expected payment protocol. If multiple protocols are supported, use `schemes`.
 `schemes` | OPTIONAL. Array of payment protocol identifiers the verifier expects to support for this resource, for example `x402`.
-`supported_currencies` | OPTIONAL. Array of currency, token, or asset identifiers that may be accepted for payment. Currency identifiers SHOULD use ISO 4217 codes when referring to fiat currencies. Other assets SHOULD use identifiers defined by the selected payment protocol.
 `options` | OPTIONAL. Array of payment options or quotes known at challenge time. Each option describes one way the presenter may satisfy the payment requirement.
-`payment_request_uri` | OPTIONAL. URI where the presenter can obtain protocol-specific payment request details. This URI is informational in the x401 payload; payment remains governed by the protocol used with `402 Payment Required`.
-`notes` | OPTIONAL. Human-readable notes.
 
 ### Payment Option Members
 
@@ -555,7 +556,6 @@ Name | Definition
 `recipient` | OPTIONAL. Payment-protocol-specific recipient or merchant identifier.
 `description` | OPTIONAL. Human-readable description of what the payment covers.
 `expires_at` | OPTIONAL. Time after which the quoted option may no longer be valid.
-`payment_request_uri` | OPTIONAL. URI where the presenter can obtain protocol-specific payment request details for this option.
 
 ## Presenter Processing Rules
 
@@ -974,18 +974,23 @@ Decoded x401 payload, shown for readability:
   "payment": {
     "required": true,
     "schemes": ["x402"],
-    "supported_currencies": ["USD", "USDC"],
     "options": [
       {
         "scheme": "x402",
         "amount": "0.25",
         "currency": "USD",
         "description": "Premium medical study access",
-        "expires_at": "2026-05-05T18:00:00Z",
-        "payment_request_uri": "https://research.example.com/x402/payment-requests/premium-medical-study-42"
+        "expires_at": "2026-05-05T18:00:00Z"
+      },
+      {
+        "scheme": "x402",
+        "amount": "0.20",
+        "currency": "USDC",
+        "network": "base",
+        "description": "Premium medical study access",
+        "expires_at": "2026-05-05T18:00:00Z"
       }
-    ],
-    "notes": "Payment is required after proof is satisfied. The final payment request is returned with 402."
+    ]
   }
 }
 ```
@@ -1006,8 +1011,7 @@ Cache-Control: no-store
     "scheme": "x402",
     "amount": "0.25",
     "currency": "USD",
-    "description": "Premium medical study access",
-    "payment_request_uri": "https://research.example.com/x402/payment-requests/premium-medical-study-42"
+    "description": "Premium medical study access"
   }
 }
 ```
