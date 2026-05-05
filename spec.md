@@ -283,7 +283,7 @@ A server that requires payment MUST use `402 Payment Required` and MUST NOT over
 
 Payment metadata MAY be declared in a x401 payload for informational purposes when both proof and payment are required, but payment satisfaction itself remains governed by the payment protocol used with `402`.
 
-When payment is known to be required before proof is submitted, the verifier SHOULD include enough payment metadata in the x401 payload for the presenter to decide whether to continue before disclosing identity or credential-derived information. This metadata can include amount, currency or asset, supported payment schemes, and quote expiration. Protocol-specific payment request details remain part of the later `402 Payment Required` exchange. If the final `402 Payment Required` response materially differs from the payment metadata declared in the x401 payload, the presenter MAY abandon the transaction or restart the proof flow.
+When payment is known to be required before proof is submitted, the verifier SHOULD include enough payment metadata in the x401 payload for the presenter to decide whether to continue before disclosing identity or credential-derived information. This metadata can include payment options with amount, currency or asset, payment scheme, and quote expiration. Protocol-specific payment request details remain part of the later `402 Payment Required` exchange. If the final `402 Payment Required` response materially differs from the payment metadata declared in the x401 payload, the presenter MAY abandon the transaction or restart the proof flow.
 
 ### 403 for Failed Policy Satisfaction
 
@@ -515,7 +515,6 @@ The payment object is informational and orchestration-oriented only. It does not
 ```json
 {
   "required": true,
-  "schemes": ["x402"],
   "options": [
     {
       "scheme": "x402",
@@ -541,7 +540,6 @@ The payment object is informational and orchestration-oriented only. It does not
 Name | Definition
 ---- | ----------
 `required` | OPTIONAL. Boolean indicating whether payment is additionally required.
-`schemes` | OPTIONAL. Array of payment protocol identifiers the verifier expects to support for this resource, for example `x402`.
 `options` | OPTIONAL. Array of payment options or quotes known at challenge time. Each option describes one way the presenter may satisfy the payment requirement.
 
 ### Payment Option Members
@@ -973,7 +971,6 @@ Decoded x401 payload, shown for readability:
   },
   "payment": {
     "required": true,
-    "schemes": ["x402"],
     "options": [
       {
         "scheme": "x402",
